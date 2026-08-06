@@ -1,4 +1,4 @@
-.PHONY: proto tidy migrate up down run-all test lint build
+.PHONY: proto tidy migrate up down run-all test lint build docs-serve docs-build
 
 export PATH := $(PATH):$(HOME)/go/bin:$(shell go env GOPATH)/bin
 
@@ -50,3 +50,8 @@ test:
 
 lint:
 	golangci-lint run ./...
+docs-serve:
+	NO_MKDOCS_2_WARNING=1 mkdocs serve
+
+docs-build:
+	NO_MKDOCS_2_WARNING=1 mkdocs build --strict

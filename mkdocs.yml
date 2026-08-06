@@ -1,0 +1,55 @@
+site_name: VRP One-Click Deposit System Architecture & Documentation
+site_description: Production-grade Open Banking Pay-by-Bank / VRP microservices platform in Go
+site_author: Hozgan Team
+repo_url: https://github.com/hozgan/vrp-demo
+repo_name: hozgan/vrp-demo
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+
+nav:
+  - Overview: index.md
+  - Architecture: architecture.md
+  - System Design Patterns: patterns.md
+  - Design Spec Gaps & Solutions: gaps-and-refinements.md
+  - Local Development & Kind: local-development.md
+  - Testing Strategy: testing.md

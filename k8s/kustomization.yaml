@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vrp-demo
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - infra/postgres.yaml
+  - infra/redis.yaml
+  - infra/redpanda.yaml
+  - jobs/migrations-configmap.yaml
+  - jobs/migrate.yaml
+  - services/gateway/all.yaml
+  - services/merchant-svc/all.yaml
+  - services/consent-svc/all.yaml
+  - services/payment-svc/all.yaml
+  - services/risk-svc/all.yaml
+  - services/ledger-svc/all.yaml
+  - services/bank-adapter/all.yaml
+  - services/notification-svc/all.yaml

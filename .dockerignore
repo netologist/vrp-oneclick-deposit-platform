@@ -1,0 +1,13 @@
+bin/
+logs/
+.git/
+**/*_test.go
+**/.DS_Store
+docs/
+*.md
+!go.mod
+!go.sum
+k8s/
+deploy/
+.idea/
+.vscode/

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-adapter
+  namespace: vrp-demo
+  labels:
+    app: bank-adapter
+    app.kubernetes.io/part-of: vrp-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bank-adapter
+  template:
+    metadata:
+      labels:
+        app: bank-adapter
+    spec:
+      serviceAccountName: vrp-svc-account
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: bank-adapter
+          image: vrp-demo/bank-adapter:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50056
+            - containerPort: 18080
+          envFrom:
+            - configMapRef:
+                name: vrp-config
+            - secretRef:
+                name: vrp-secrets
+          readinessProbe:
+            grpc:
+              port: 50056
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-adapter
+  namespace: vrp-demo
+  labels:
+    app: bank-adapter
+spec:
+  selector:
+    app: bank-adapter
+  ports:
+    - name: grpc
+      port: 50056
+      targetPort: 50056
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bank-adapter-pdb
+  namespace: vrp-demo
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: bank-adapter

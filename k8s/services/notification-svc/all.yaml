@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-svc
+  namespace: vrp-demo
+  labels:
+    app: notification-svc
+    app.kubernetes.io/part-of: vrp-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-svc
+  template:
+    metadata:
+      labels:
+        app: notification-svc
+    spec:
+      serviceAccountName: vrp-svc-account
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: notification-svc
+          image: vrp-demo/notification-svc:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: vrp-config
+            - secretRef:
+                name: vrp-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-svc-pdb
+  namespace: vrp-demo
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: notification-svc

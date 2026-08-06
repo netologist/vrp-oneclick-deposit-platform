@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger-svc
+  namespace: vrp-demo
+  labels:
+    app: ledger-svc
+    app.kubernetes.io/part-of: vrp-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ledger-svc
+  template:
+    metadata:
+      labels:
+        app: ledger-svc
+    spec:
+      serviceAccountName: vrp-svc-account
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: ledger-svc
+          image: vrp-demo/ledger-svc:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50055
+          envFrom:
+            - configMapRef:
+                name: vrp-config
+            - secretRef:
+                name: vrp-secrets
+          readinessProbe:
+            grpc:
+              port: 50055
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger-svc
+  namespace: vrp-demo
+  labels:
+    app: ledger-svc
+spec:
+  selector:
+    app: ledger-svc
+  ports:
+    - name: grpc
+      port: 50055
+      targetPort: 50055
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ledger-svc-pdb
+  namespace: vrp-demo
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ledger-svc

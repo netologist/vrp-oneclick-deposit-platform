@@ -28,9 +28,9 @@ func NewRouter(d RouterDeps) http.Handler {
 
 	h := d.Handlers
 
+	h.RegisterSwaggerRoutes(r)
 	r.Get("/healthz/live", h.Live)
 	r.Get("/healthz/ready", h.Ready)
-
 	r.Route("/v1", func(r chi.Router) {
 		// Public routes
 		r.Post("/auth/token", h.IssueToken)

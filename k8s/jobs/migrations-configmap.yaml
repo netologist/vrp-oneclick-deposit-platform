@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vrp-migrations
+  namespace: vrp-demo
+data:
+  merchant.sql: |
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    
+    CREATE TABLE IF NOT EXISTS merchant (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name          TEXT NOT NULL,
+        webhook_url   TEXT NOT NULL,
+        contact_email TEXT,
+        kyb_status    TEXT NOT NULL DEFAULT 'ACTIVE',
+        status        TEXT NOT NULL DEFAULT 'ACTIVE',
+        hmac_secret   TEXT NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE TABLE IF NOT EXISTS api_key (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        merchant_id UUID NOT NULL REFERENCES merchant(id),
+        key_hash    TEXT NOT NULL UNIQUE,
+        key_prefix  TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'ACTIVE',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at  TIMESTAMPTZ
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_api_key_prefix ON api_key(key_prefix);
+    CREATE INDEX IF NOT EXISTS idx_api_key_merchant ON api_key(merchant_id);
+
+  consent.sql: |
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    
+    CREATE TABLE IF NOT EXISTS consent (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        merchant_id       UUID NOT NULL,
+        consumer_id       TEXT NOT NULL,
+        bank_consent_ref  TEXT NOT NULL UNIQUE,
+        status            TEXT NOT NULL DEFAULT 'ACTIVE',
+        max_amount_pence  BIGINT NOT NULL,
+        max_monthly_pence BIGINT NOT NULL,
+        currency          CHAR(3) NOT NULL DEFAULT 'GBP',
+        valid_from        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        valid_until       TIMESTAMPTZ NOT NULL,
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE TABLE IF NOT EXISTS consent_reservation (
+        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        consent_id   UUID NOT NULL REFERENCES consent(id),
+        payment_id   UUID NOT NULL UNIQUE,
+        amount_pence BIGINT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'HELD', -- HELD | CONFIRMED | RELEASED
+        expires_at   TIMESTAMPTZ NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE TABLE IF NOT EXISTS consent_usage (
+        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        consent_id   UUID NOT NULL REFERENCES consent(id),
+        payment_id   UUID NOT NULL UNIQUE,
+        amount_pence BIGINT NOT NULL,
+        settled_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_consent_consumer ON consent(consumer_id, merchant_id);
+    CREATE INDEX IF NOT EXISTS idx_consent_reservation_consent ON consent_reservation(consent_id) WHERE status = 'HELD';
+    CREATE INDEX IF NOT EXISTS idx_consent_usage_window ON consent_usage(consent_id, settled_at);
+
+  payment.sql: |
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    
+    CREATE TABLE IF NOT EXISTS payment (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        idempotency_key  TEXT NOT NULL UNIQUE,
+        merchant_id      UUID NOT NULL,
+        consent_id       UUID NOT NULL,
+        consumer_id      TEXT NOT NULL DEFAULT '',
+        amount_pence     BIGINT NOT NULL,
+        currency         CHAR(3) NOT NULL DEFAULT 'GBP',
+        status           TEXT NOT NULL DEFAULT 'INITIATED',
+        bank_payment_ref TEXT,
+        reservation_id   UUID,
+        risk_score       INT,
+        risk_decision    TEXT,
+        failure_reason   TEXT,
+        description      TEXT,
+        initiated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        settled_at       TIMESTAMPTZ,
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE TABLE IF NOT EXISTS payment_event (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        payment_id  UUID NOT NULL REFERENCES payment(id),
+        from_status TEXT NOT NULL,
+        to_status   TEXT NOT NULL,
+        reason      TEXT,
+        metadata    JSONB,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE TABLE IF NOT EXISTS outbox (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        topic      TEXT NOT NULL,
+        key        TEXT NOT NULL,
+        payload    JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_payment_merchant ON payment(merchant_id);
+    CREATE INDEX IF NOT EXISTS idx_payment_event_payment ON payment_event(payment_id);
+    CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at);
+
+  ledger.sql: |
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    
+    CREATE TABLE IF NOT EXISTS account (
+        id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        type      TEXT NOT NULL,
+        owner_ref TEXT NOT NULL,
+        currency  CHAR(3) NOT NULL DEFAULT 'GBP',
+        UNIQUE (type, owner_ref, currency)
+    );
+    
+    CREATE TABLE IF NOT EXISTS journal_entry (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        payment_id  TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL,
+        reversed    BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE TABLE IF NOT EXISTS journal_line (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        journal_entry_id UUID NOT NULL REFERENCES journal_entry(id),
+        account_id       UUID NOT NULL REFERENCES account(id),
+        direction        CHAR(2) NOT NULL CHECK (direction IN ('DR', 'CR')),
+        amount_pence     BIGINT NOT NULL CHECK (amount_pence > 0),
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    
+    CREATE OR REPLACE FUNCTION check_journal_balance() RETURNS TRIGGER AS $$
+    DECLARE
+        imbalance BIGINT;
+        line_count INT;
+    BEGIN
+        SELECT COUNT(*) INTO line_count
+        FROM journal_line
+        WHERE journal_entry_id = NEW.journal_entry_id;
+    
+        -- Balance check only when we have at least 2 lines (entry complete)
+        IF line_count < 2 THEN
+            RETURN NEW;
+        END IF;
+    
+        SELECT COALESCE(SUM(CASE WHEN direction = 'DR' THEN amount_pence ELSE -amount_pence END), 0)
+        INTO imbalance
+        FROM journal_line
+        WHERE journal_entry_id = NEW.journal_entry_id;
+    
+        IF imbalance != 0 THEN
+            RAISE EXCEPTION 'Journal entry % is not balanced (imbalance=%)', NEW.journal_entry_id, imbalance;
+        END IF;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    
+    DROP TRIGGER IF EXISTS trg_journal_balance ON journal_line;
+    CREATE CONSTRAINT TRIGGER trg_journal_balance
+        AFTER INSERT ON journal_line
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW
+        EXECUTE FUNCTION check_journal_balance();
+    
+    CREATE INDEX IF NOT EXISTS idx_journal_line_entry ON journal_line(journal_entry_id);
+    CREATE INDEX IF NOT EXISTS idx_journal_line_account ON journal_line(account_id);
+

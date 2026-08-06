@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: vrp-demo
+  labels:
+    app: migrate
+    app.kubernetes.io/part-of: vrp-demo
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: migrate
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: postgres:16-alpine
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              export PGPASSWORD=vrp
+              for i in $(seq 1 30); do
+                pg_isready -h postgres -U vrp && break
+                sleep 2
+              done
+              for db in merchant consent payment ledger; do
+                echo "ensuring database $db"
+                psql -h postgres -U vrp -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 \
+                  || psql -h postgres -U vrp -d postgres -c "CREATE DATABASE $db"
+                echo "applying schema $db"
+                psql -h postgres -U vrp -d "$db" -v ON_ERROR_STOP=1 -f "/migrations/${db}.sql"
+              done
+              echo "migrations complete"
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+      volumes:
+        - name: migrations
+          configMap:
+            name: vrp-migrations

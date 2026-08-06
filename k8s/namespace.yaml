@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vrp-demo
+  labels:
+    app.kubernetes.io/part-of: vrp-demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vrp-svc-account
+  namespace: vrp-demo
+  labels:
+    app.kubernetes.io/part-of: vrp-demo

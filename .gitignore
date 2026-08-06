@@ -1,5 +1,6 @@
 bin/
 logs/
+site/
 *.exe
 *.test
 *.out

@@ -27,8 +27,23 @@ const (
 	platformFeeRateBPS   = int64(100) // 1% = 100 basis points
 )
 
+// paymentRepo is the persistence surface used by the payment saga orchestrator.
+// *Repo implements it; tests supply an in-memory fake.
+type paymentRepo interface {
+	CreatePayment(ctx context.Context, p *Payment) error
+	GetByID(ctx context.Context, id uuid.UUID) (*Payment, error)
+	GetByIdempotencyKey(ctx context.Context, key string) (*Payment, error)
+	UpdateAfterConsent(ctx context.Context, p *Payment, reservationID uuid.UUID, consumerID string) error
+	UpdateAfterRisk(ctx context.Context, p *Payment, score int32, decision string) error
+	UpdateAfterBank(ctx context.Context, p *Payment, bankRef string) error
+	SettleWithOutbox(ctx context.Context, p *Payment) error
+	MarkFailed(ctx context.Context, p *Payment, reason string) error
+	MarkManualReview(ctx context.Context, p *Payment, reason string) error
+	ResetForRetry(ctx context.Context, p *Payment) error
+}
+
 type Orchestrator struct {
-	repo    *Repo
+	repo    paymentRepo
 	idem    *idempotency.Store
 	consent consentv1.ConsentServiceClient
 	risk    riskv1.RiskServiceClient
@@ -37,7 +52,7 @@ type Orchestrator struct {
 }
 
 func NewOrchestrator(
-	repo *Repo,
+	repo paymentRepo,
 	idem *idempotency.Store,
 	consent consentv1.ConsentServiceClient,
 	risk riskv1.RiskServiceClient,

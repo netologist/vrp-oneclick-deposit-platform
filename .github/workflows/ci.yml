@@ -1,0 +1,215 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  # ── 1. Detect Changed Path / Services ──────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+      shared_changed: ${{ steps.filter.outputs.shared }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'pkg/shared/**'
+              - 'gen/**'
+              - 'proto/**'
+              - 'go.work*'
+              - 'Makefile'
+              - 'Dockerfile'
+              - '.github/workflows/**'
+            gateway:
+              - 'services/gateway/**'
+            merchant-svc:
+              - 'services/merchant-svc/**'
+            consent-svc:
+              - 'services/consent-svc/**'
+            payment-svc:
+              - 'services/payment-svc/**'
+            risk-svc:
+              - 'services/risk-svc/**'
+            ledger-svc:
+              - 'services/ledger-svc/**'
+            bank-adapter:
+              - 'services/bank-adapter/**'
+            notification-svc:
+              - 'services/notification-svc/**'
+
+  # ── 2. Fan-Out Matrix: Unit Test & Build Changed Services ──────────────────
+  build-service:
+    name: Build & Test (${{ matrix.service }})
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.detect-changes.outputs.shared_changed == 'true' || contains(needs.detect-changes.outputs.services, matrix.service) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - gateway
+          - merchant-svc
+          - consent-svc
+          - payment-svc
+          - risk-svc
+          - ledger-svc
+          - bank-adapter
+          - notification-svc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+          check-latest: false
+
+      - name: Test Shared Packages
+        if: matrix.service == 'gateway' && needs.detect-changes.outputs.shared_changed == 'true'
+        run: |
+          cd pkg/shared && go test ./... -count=1
+
+      - name: Unit Test Service
+        run: |
+          cd services/${{ matrix.service }}
+          go test ./... -count=1
+
+      - name: Build Go Binary
+        run: |
+          cd services/${{ matrix.service }}
+          CGO_ENABLED=0 go build -o ../../bin/${{ matrix.service }} ./cmd
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image (Dry-Run Cache)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          build-args: |
+            SERVICE=${{ matrix.service }}
+          tags: vrp-demo/${{ matrix.service }}:ci
+          push: false
+          load: true
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ── 3. Fan-In: Kind Cluster & E2E Acceptance Tests ─────────────────────────
+  e2e-kind:
+    name: Kind Cluster E2E Acceptance Test
+    needs: [detect-changes, build-service]
+    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+
+      - name: Create Kind Cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: vrp-demo
+          config: deploy/kind/cluster.yaml
+          wait: 120s
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Load Container Images into Kind
+        run: |
+          SERVICES=(gateway merchant-svc consent-svc payment-svc risk-svc ledger-svc bank-adapter notification-svc)
+          for svc in "${SERVICES[@]}"; do
+            echo "building docker image vrp-demo/${svc}:dev..."
+            docker build -t "vrp-demo/${svc}:dev" --build-arg "SERVICE=${svc}" .
+            echo "loading into kind..."
+            kind load docker-image "vrp-demo/${svc}:dev" --name vrp-demo
+          done
+
+      - name: Deploy NGINX Ingress Controller
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=180s
+
+      - name: Apply Kubernetes Manifests & DB Migrations
+        run: |
+          kubectl apply -k k8s/
+          echo "waiting for postgres..."
+          kubectl -n vrp-demo rollout status deploy/postgres --timeout=120s
+          kubectl -n vrp-demo wait --for=condition=ready pod -l app=postgres --timeout=120s
+
+          echo "running db migrations job..."
+          kubectl -n vrp-demo wait --for=condition=complete job/migrate --timeout=120s
+
+          echo "waiting for core deployments..."
+          SERVICES=(merchant-svc consent-svc risk-svc ledger-svc bank-adapter payment-svc notification-svc gateway)
+          for svc in "${SERVICES[@]}"; do
+            kubectl -n vrp-demo rollout status "deploy/${svc}" --timeout=120s
+          done
+
+      - name: Run E2E Smoke & Acceptance Tests
+        run: |
+          echo "setting up port-forward to gateway..."
+          kubectl -n vrp-demo port-forward svc/gateway 8080:80 &
+          PF_PID=$!
+          trap 'kill $PF_PID 2>/dev/null || true' EXIT
+          sleep 3
+
+          echo "running e2e-smoke.sh against Kind cluster..."
+          BASE_URL="http://localhost:8080" ./scripts/e2e-smoke.sh
+
+      - name: Debug Pods on Failure
+        if: failure()
+        run: |
+          kubectl -n vrp-demo get pods,svc,jobs -o wide
+          kubectl -n vrp-demo logs -l app=gateway --tail=100 || true
+          kubectl -n vrp-demo logs -l app=payment-svc --tail=100 || true
+          kubectl -n vrp-demo logs -l app=migrate || true
+
+  # ── 4. MkDocs Build & GitHub Pages Deploy ─────────────────────────────────
+  build-docs:
+    name: Build & Deploy MkDocs Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install MkDocs & Material Theme
+        run: |
+          pip install mkdocs mkdocs-material pymdown-extensions
+
+      - name: Build MkDocs Site
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: |
+          mkdocs build --strict
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: |
+          mkdocs gh-deploy --force

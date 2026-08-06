@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-svc
+  namespace: vrp-demo
+  labels:
+    app: risk-svc
+    app.kubernetes.io/part-of: vrp-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: risk-svc
+  template:
+    metadata:
+      labels:
+        app: risk-svc
+    spec:
+      serviceAccountName: vrp-svc-account
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: risk-svc
+          image: vrp-demo/risk-svc:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50054
+          envFrom:
+            - configMapRef:
+                name: vrp-config
+            - secretRef:
+                name: vrp-secrets
+          readinessProbe:
+            grpc:
+              port: 50054
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-svc
+  namespace: vrp-demo
+  labels:
+    app: risk-svc
+spec:
+  selector:
+    app: risk-svc
+  ports:
+    - name: grpc
+      port: 50054
+      targetPort: 50054
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: risk-svc-pdb
+  namespace: vrp-demo
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: risk-svc
