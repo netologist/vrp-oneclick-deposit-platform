@@ -60,11 +60,14 @@ jobs:
           CHANGES='${{ steps.filter.outputs.changes }}'
           ALL='["gateway","merchant-svc","consent-svc","payment-svc","risk-svc","ledger-svc","bank-adapter","notification-svc"]'
 
+          # Filter changes to keep only actual microservices (exclude "docs", etc.)
+          SVC_CHANGES=$(echo "$CHANGES" | jq -c --argjson all "$ALL" '[.[] | select(. as $c | $all | index($c))]')
+
           if [ "$SHARED" = "true" ]; then
             echo "matrix=$ALL" >> $GITHUB_OUTPUT
             echo "has_changes=true" >> $GITHUB_OUTPUT
-          elif [ "$CHANGES" != "[]" ] && [ -n "$CHANGES" ]; then
-            echo "matrix=$CHANGES" >> $GITHUB_OUTPUT
+          elif [ "$SVC_CHANGES" != "[]" ] && [ -n "$SVC_CHANGES" ]; then
+            echo "matrix=$SVC_CHANGES" >> $GITHUB_OUTPUT
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
             echo "matrix=[]" >> $GITHUB_OUTPUT
