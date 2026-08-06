@@ -1,8 +1,8 @@
 site_name: VRP One-Click Deposit System Architecture & Documentation
 site_description: Production-grade Open Banking Pay-by-Bank / VRP microservices platform in Go
-site_author: Hozgan Team
-repo_url: https://github.com/hozgan/vrp-demo
-repo_name: hozgan/vrp-demo
+site_author: Hasan Ozgan
+repo_url: https://github.com/netologist/vrp-oneclick-deposit-platform
+repo_name: netologist/vrp-oneclick-deposit-platform
 
 theme:
   name: material

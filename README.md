@@ -1,6 +1,6 @@
 # VRP One-Click Deposit Demo
 
-Pay-by-Bank / Open Banking VRP platform — interview-grade Go microservices demo.
+Pay-by-Bank / Open Banking VRP platform - interview-grade Go microservices demo.
 
 ## Architecture
 
@@ -60,4 +60,4 @@ Default secrets/URLs are demo-local (`vrp:vrp@localhost`, `JWT_SECRET=super-secr
 
 ## Module layout
 
-Go workspace (`go.work`) — one module per service + `gen` + `pkg/shared`.
+Go workspace (`go.work`) - one module per service + `gen` + `pkg/shared`.
