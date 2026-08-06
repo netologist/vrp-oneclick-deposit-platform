@@ -51,5 +51,6 @@ nav:
   - Architecture: architecture.md
   - System Design Patterns: patterns.md
   - Design Spec Gaps & Solutions: gaps-and-refinements.md
+  - Unimplemented Tasks & Roadmap: UNIMPLEMENTED-TASKS.md
   - Local Development & Kind: local-development.md
   - Testing Strategy: testing.md
