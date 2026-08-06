@@ -1,0 +1,57 @@
+syntax = "proto3";
+package merchant.v1;
+option go_package = "github.com/hozgan/vrp-demo/gen/merchant/v1;merchantv1";
+
+import "google/protobuf/timestamp.proto";
+
+service MerchantService {
+  rpc RegisterMerchant(RegisterMerchantRequest) returns (RegisterMerchantResponse);
+  rpc GetMerchant    (GetMerchantRequest)     returns (Merchant);
+  rpc SuspendMerchant(SuspendMerchantRequest) returns (Merchant);
+  rpc GetMerchantByApiKey(GetMerchantByApiKeyRequest) returns (Merchant);
+  rpc GetWebhookConfig   (GetWebhookConfigRequest)    returns (WebhookConfig);
+}
+
+message Merchant {
+  string id          = 1;
+  string name        = 2;
+  string kyb_status  = 3;  // PENDING_KYB | KYB_APPROVED | ACTIVE | SUSPENDED
+  string status      = 4;
+  string webhook_url = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message RegisterMerchantRequest {
+  string name          = 1;
+  string webhook_url   = 2;
+  string contact_email = 3;
+}
+
+message RegisterMerchantResponse {
+  Merchant merchant = 1;
+  string   api_key  = 2;
+}
+
+message GetMerchantRequest {
+  string merchant_id = 1;
+}
+
+message SuspendMerchantRequest {
+  string merchant_id = 1;
+  string reason      = 2;
+}
+
+message GetMerchantByApiKeyRequest {
+  string api_key = 1;
+}
+
+message GetWebhookConfigRequest {
+  string merchant_id = 1;
+}
+
+message WebhookConfig {
+  string merchant_id = 1;
+  string webhook_url = 2;
+  string hmac_secret = 3;
+}

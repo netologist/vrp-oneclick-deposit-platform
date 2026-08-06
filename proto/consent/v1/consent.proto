@@ -1,0 +1,105 @@
+syntax = "proto3";
+package consent.v1;
+option go_package = "github.com/hozgan/vrp-demo/gen/consent/v1;consentv1";
+
+import "common/v1/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+service ConsentService {
+  rpc CreateConsent (CreateConsentRequest)  returns (Consent);
+  rpc GetConsent    (GetConsentRequest)     returns (Consent);
+  rpc RevokeConsent (RevokeConsentRequest)  returns (Consent);
+  rpc ListConsents  (ListConsentsRequest)   returns (ListConsentsResponse);
+  rpc ValidateAndReserve   (ReserveRequest)   returns (ReserveResponse);
+  rpc ConfirmReservation   (ConfirmRequest)   returns (google.protobuf.Empty);
+  rpc ReleaseReservation   (ReleaseRequest)   returns (google.protobuf.Empty);
+  rpc GetRollingUsage      (UsageRequest)     returns (UsageResponse);
+}
+
+enum ConsentStatus {
+  CONSENT_STATUS_UNSPECIFIED = 0;
+  PENDING                    = 1;
+  ACTIVE                     = 2;
+  REVOKED                    = 3;
+  EXPIRED                    = 4;
+}
+
+message Consent {
+  string        id               = 1;
+  string        merchant_id      = 2;
+  string        consumer_id      = 3;
+  string        bank_consent_ref = 4;
+  ConsentStatus status           = 5;
+  common.v1.Money max_per_transaction  = 6;
+  common.v1.Money max_per_month        = 7;
+  google.protobuf.Timestamp valid_from  = 8;
+  google.protobuf.Timestamp valid_until = 9;
+  google.protobuf.Timestamp created_at  = 10;
+  google.protobuf.Timestamp updated_at  = 11;
+}
+
+message CreateConsentRequest {
+  string merchant_id      = 1;
+  string consumer_id      = 2;
+  string bank_consent_ref = 3;
+  common.v1.Money max_per_transaction = 4;
+  common.v1.Money max_per_month       = 5;
+  google.protobuf.Timestamp valid_until = 6;
+}
+
+message GetConsentRequest {
+  string consent_id  = 1;
+  string merchant_id = 2;
+}
+
+message RevokeConsentRequest {
+  string consent_id  = 1;
+  string merchant_id = 2;
+  string reason      = 3;
+}
+
+message ListConsentsRequest {
+  string consumer_id = 1;
+  string merchant_id = 2;
+  ConsentStatus status = 3;
+  common.v1.PageRequest page = 4;
+}
+
+message ListConsentsResponse {
+  repeated Consent consents = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message ReserveRequest {
+  string consent_id  = 1;
+  string payment_id  = 2;
+  common.v1.Money amount = 3;
+}
+
+message ReserveResponse {
+  string reservation_id     = 1;
+  common.v1.Money remaining_monthly = 2;
+  string consumer_id = 3;
+  string bank_consent_ref = 4;
+}
+
+message ConfirmRequest {
+  string reservation_id = 1;
+  string payment_id     = 2;
+}
+
+message ReleaseRequest {
+  string reservation_id = 1;
+  string reason         = 2;
+}
+
+message UsageRequest {
+  string consent_id = 1;
+}
+
+message UsageResponse {
+  common.v1.Money used_this_month      = 1;
+  common.v1.Money remaining_this_month = 2;
+  int32           tx_count_this_month  = 3;
+}

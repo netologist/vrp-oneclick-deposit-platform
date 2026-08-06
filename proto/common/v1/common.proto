@@ -1,0 +1,20 @@
+syntax = "proto3";
+package common.v1;
+option go_package = "github.com/hozgan/vrp-demo/gen/common/v1;commonv1";
+
+// Money is always stored as pence/cents (integer) + ISO 4217 currency code.
+// NEVER use float or double for monetary values.
+message Money {
+  int64  amount_pence = 1;   // e.g. 5000 = £50.00
+  string currency     = 2;   // e.g. "GBP", "CAD"
+}
+
+message PageRequest {
+  int32  page_size  = 1;  // max 100
+  string page_token = 2;  // cursor (base64-encoded last ID)
+}
+
+message PageResponse {
+  string next_page_token = 1;  // empty = last page
+  int32  total_count     = 2;
+}

@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS payment_event;
+DROP TABLE IF EXISTS payment;

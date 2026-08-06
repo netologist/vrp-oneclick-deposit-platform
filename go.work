@@ -1,0 +1,14 @@
+go 1.26.2
+
+use (
+	./gen
+	./pkg/shared
+	./services/bank-adapter
+	./services/consent-svc
+	./services/gateway
+	./services/ledger-svc
+	./services/merchant-svc
+	./services/notification-svc
+	./services/payment-svc
+	./services/risk-svc
+)

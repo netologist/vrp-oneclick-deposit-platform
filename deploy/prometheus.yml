@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: gateway
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+  - job_name: merchant-svc
+    static_configs:
+      - targets: ["host.docker.internal:9101"]
+  - job_name: consent-svc
+    static_configs:
+      - targets: ["host.docker.internal:9102"]
+  - job_name: payment-svc
+    static_configs:
+      - targets: ["host.docker.internal:9103"]
+  - job_name: risk-svc
+    static_configs:
+      - targets: ["host.docker.internal:9104"]
+  - job_name: ledger-svc
+    static_configs:
+      - targets: ["host.docker.internal:9105"]
+  - job_name: bank-adapter
+    static_configs:
+      - targets: ["host.docker.internal:9106"]

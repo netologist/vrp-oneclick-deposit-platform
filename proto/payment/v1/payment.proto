@@ -1,0 +1,59 @@
+syntax = "proto3";
+package payment.v1;
+option go_package = "github.com/hozgan/vrp-demo/gen/payment/v1;paymentv1";
+
+import "common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+service PaymentService {
+  rpc InitiatePayment(InitiatePaymentRequest) returns (Payment);
+  rpc GetPayment(GetPaymentRequest) returns (Payment);
+  rpc RetryPayment(RetryPaymentRequest) returns (Payment);
+}
+
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  INITIATED                  = 1;
+  CONSENT_RESERVED           = 2;
+  RISK_PASSED                = 3;
+  AUTHORISING                = 4;
+  SETTLED                    = 5;
+  FAILED                     = 6;
+  MANUAL_REVIEW              = 7;
+}
+
+message Payment {
+  string id               = 1;
+  string idempotency_key  = 2;
+  string merchant_id      = 3;
+  string consent_id       = 4;
+  string consumer_id      = 5;
+  common.v1.Money amount  = 6;
+  PaymentStatus status    = 7;
+  string bank_payment_ref = 8;
+  int32  risk_score       = 9;
+  string risk_decision    = 10;
+  string failure_reason   = 11;
+  string description      = 12;
+  google.protobuf.Timestamp initiated_at = 13;
+  google.protobuf.Timestamp settled_at   = 14;
+  google.protobuf.Timestamp updated_at   = 15;
+}
+
+message InitiatePaymentRequest {
+  string idempotency_key = 1;
+  string merchant_id     = 2;
+  string consent_id      = 3;
+  common.v1.Money amount = 4;
+  string description     = 5;
+}
+
+message GetPaymentRequest {
+  string payment_id  = 1;
+  string merchant_id = 2;
+}
+
+message RetryPaymentRequest {
+  string payment_id  = 1;
+  string merchant_id = 2;
+}

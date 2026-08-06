@@ -1,0 +1,69 @@
+syntax = "proto3";
+package ledger.v1;
+option go_package = "github.com/hozgan/vrp-demo/gen/ledger/v1;ledgerv1";
+
+import "common/v1/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+service LedgerService {
+  rpc PostDoubleEntry (PostEntryRequest)  returns (JournalEntry);
+  rpc ReverseEntry    (ReverseRequest)    returns (google.protobuf.Empty);
+  rpc GetBalance      (BalanceRequest)    returns (BalanceResponse);
+  rpc GetJournalEntry (JournalEntryRequest) returns (JournalEntry);
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DR                    = 1;
+  CR                    = 2;
+}
+
+enum AccountType {
+  ACCOUNT_TYPE_UNSPECIFIED = 0;
+  CONSUMER_ESCROW          = 1;
+  MERCHANT_ESCROW          = 2;
+  PLATFORM_FEE             = 3;
+}
+
+message JournalLine {
+  string      id          = 1;
+  AccountType account_type = 2;
+  string      owner_ref   = 3;
+  Direction   direction   = 4;
+  common.v1.Money amount  = 5;
+}
+
+message JournalEntry {
+  string   id          = 1;
+  string   payment_id  = 2;
+  string   description = 3;
+  repeated JournalLine lines = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message PostEntryRequest {
+  string   payment_id  = 1;
+  string   description = 2;
+  repeated JournalLine lines = 3;
+}
+
+message ReverseRequest {
+  string payment_id = 1;
+  string reason     = 2;
+}
+
+message BalanceRequest {
+  AccountType account_type = 1;
+  string      owner_ref    = 2;
+  string      currency     = 3;
+}
+
+message BalanceResponse {
+  common.v1.Money balance = 1;
+  google.protobuf.Timestamp as_of = 2;
+}
+
+message JournalEntryRequest {
+  string payment_id = 1;
+}

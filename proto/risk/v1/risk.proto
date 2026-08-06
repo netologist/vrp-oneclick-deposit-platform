@@ -1,0 +1,50 @@
+syntax = "proto3";
+package risk.v1;
+option go_package = "github.com/hozgan/vrp-demo/gen/risk/v1;riskv1";
+
+import "common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+service RiskService {
+  rpc Score(ScoreRequest) returns (ScoreResponse);
+  rpc AddToBlocklist    (BlocklistRequest) returns (BlocklistEntry);
+  rpc RemoveFromBlocklist(BlocklistRequest) returns (BlocklistEntry);
+}
+
+enum RiskDecision {
+  RISK_DECISION_UNSPECIFIED = 0;
+  ALLOW                     = 1;
+  REVIEW                    = 2;
+  DECLINE                   = 3;
+}
+
+message ScoreRequest {
+  string merchant_id  = 1;
+  string consumer_id  = 2;
+  string consent_id   = 3;
+  string payment_id   = 4;
+  common.v1.Money amount = 5;
+  string ip_address   = 6;
+  string user_agent   = 7;
+}
+
+message ScoreResponse {
+  int32        score    = 1;
+  RiskDecision decision = 2;
+  string       reason   = 3;
+  repeated string rules_triggered = 4;
+}
+
+message BlocklistRequest {
+  string type  = 1;
+  string value = 2;
+  string reason = 3;
+}
+
+message BlocklistEntry {
+  string id        = 1;
+  string type      = 2;
+  string value     = 3;
+  string reason    = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
