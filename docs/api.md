@@ -4,18 +4,9 @@ The VRP Platform API Gateway exposes an **OpenAPI 3.0** compliant REST API for m
 
 ---
 
-## Interactive Live Swagger UI
+## Interactive API Reference & Swagger UI
 
-When running the system locally or in Kubernetes, access the live interactive Swagger UI directly from the API Gateway:
-
-- **Live Gateway Swagger UI**: [http://localhost:8080/docs](http://localhost:8080/docs)
-- **OpenAPI 3.0 Specification (YAML)**: [http://localhost:8080/docs/openapi.yaml](http://localhost:8080/docs/openapi.yaml)
-
----
-
-## Embedded Swagger UI Explorer
-
-Below is the embedded interactive Swagger UI rendering the platform API specification:
+Below is the interactive Swagger UI rendering the platform API specification directly within the documentation:
 
 <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
 <style>
@@ -29,8 +20,9 @@ Below is the embedded interactive Swagger UI rendering the platform API specific
 <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
 <script>
   window.addEventListener('load', function() {
+    var specUrl = new URL('../openapi.yaml', window.location.href).href;
     SwaggerUIBundle({
-      url: "http://localhost:8080/docs/openapi.yaml",
+      url: specUrl,
       dom_id: '#swagger-ui',
       deepLinking: true,
       presets: [
@@ -43,6 +35,18 @@ Below is the embedded interactive Swagger UI rendering the platform API specific
     });
   });
 </script>
+
+---
+
+## Accessing Live Gateway (Local / Kubernetes Environment)
+
+When running the VRP microservices platform on your local machine or in a Kind Kubernetes cluster:
+
+- **Gateway Base URL**: `http://localhost:8080/v1`
+- **Live Gateway Swagger UI**: [`http://localhost:8080/docs`](http://localhost:8080/docs) *(Requires local Gateway to be running)*
+- **OpenAPI 3.0 Specification File**: [openapi.yaml](openapi.yaml)
+
+---
 
 ---
 
