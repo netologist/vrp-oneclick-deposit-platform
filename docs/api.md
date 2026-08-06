@@ -19,7 +19,13 @@ Below is the interactive Swagger UI rendering the platform API specification dir
 <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
 <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
 <script>
-  window.addEventListener('load', function() {
+  function renderSwagger() {
+    var container = document.getElementById('swagger-ui');
+    if (!container) return;
+    if (typeof SwaggerUIBundle === 'undefined') {
+      setTimeout(renderSwagger, 100);
+      return;
+    }
     var specUrl = new URL('../openapi.yaml', window.location.href).href;
     SwaggerUIBundle({
       url: specUrl,
@@ -33,20 +39,18 @@ Below is the interactive Swagger UI rendering the platform API specification dir
         SwaggerUIBundle.plugins.DownloadUrl
       ]
     });
-  });
+  }
+
+  if (typeof document$ !== 'undefined') {
+    document$.subscribe(renderSwagger);
+  } else {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', renderSwagger);
+    } else {
+      renderSwagger();
+    }
+  }
 </script>
-
----
-
-## Accessing Live Gateway (Local / Kubernetes Environment)
-
-When running the VRP microservices platform on your local machine or in a Kind Kubernetes cluster:
-
-- **Gateway Base URL**: `http://localhost:8080/v1`
-- **Live Gateway Swagger UI**: [`http://localhost:8080/docs`](http://localhost:8080/docs) *(Requires local Gateway to be running)*
-- **OpenAPI 3.0 Specification File**: [openapi.yaml](openapi.yaml)
-
----
 
 ---
 
