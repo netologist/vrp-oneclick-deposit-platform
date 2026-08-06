@@ -75,9 +75,10 @@ info:
     email: platform@vrp-demo.internal
 
 servers:
+  - url: /v1
+    description: API Gateway (/v1)
   - url: http://localhost:8080/v1
-    description: Local development / Gateway
-
+    description: Local Development / Kind Cluster (http://localhost:8080)
 security:
   - bearerAuth: []
 
