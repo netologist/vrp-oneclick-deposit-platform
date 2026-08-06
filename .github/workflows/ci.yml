@@ -5,7 +5,16 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-
+  workflow_dispatch:
+    inputs:
+      build_services:
+        description: 'Build & Test Microservices + Run KinD E2E'
+        type: boolean
+        default: true
+      deploy_docs:
+        description: 'Build & Deploy MkDocs Documentation'
+        type: boolean
+        default: true
 permissions:
   contents: write
 
@@ -18,7 +27,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_changes: ${{ steps.set-matrix.outputs.has_changes }}
       shared_changed: ${{ steps.filter.outputs.shared }}
-      docs_changed: ${{ steps.filter.outputs.docs }}
+      docs_changed: ${{ steps.set-matrix.outputs.docs_changed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -56,11 +65,35 @@ jobs:
       - name: Compute Build Matrix
         id: set-matrix
         run: |
+          EVENT_NAME="${{ github.event_name }}"
+          FORCE_SERVICES="${{ inputs.build_services }}"
+          FORCE_DOCS="${{ inputs.deploy_docs }}"
           SHARED="${{ steps.filter.outputs.shared }}"
           CHANGES='${{ steps.filter.outputs.changes }}'
+          DOCS_FILTER="${{ steps.filter.outputs.docs }}"
           ALL='["gateway","merchant-svc","consent-svc","payment-svc","risk-svc","ledger-svc","bank-adapter","notification-svc"]'
 
-          # Filter changes to keep only actual microservices (exclude "docs", etc.)
+          # Manual trigger handling
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$FORCE_SERVICES" = "true" ]; then
+              echo "matrix=$ALL" >> $GITHUB_OUTPUT
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            else
+              echo "matrix=[]" >> $GITHUB_OUTPUT
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            fi
+
+            if [ "$FORCE_DOCS" = "true" ]; then
+              echo "docs_changed=true" >> $GITHUB_OUTPUT
+            else
+              echo "docs_changed=false" >> $GITHUB_OUTPUT
+            fi
+            exit 0
+          fi
+
+          # Automatic trigger handling (Push / Pull Request)
+          echo "docs_changed=$DOCS_FILTER" >> $GITHUB_OUTPUT
+
           SVC_CHANGES=$(echo "$CHANGES" | jq -c --argjson all "$ALL" '[.[] | select(. as $c | $all | index($c))]')
 
           if [ "$SHARED" = "true" ]; then
@@ -236,12 +269,12 @@ jobs:
           mkdocs build --strict
 
       - name: Upload Pages Artifact
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./site
 
       - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         id: deployment
         uses: actions/deploy-pages@v4
