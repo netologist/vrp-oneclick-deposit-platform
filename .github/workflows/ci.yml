@@ -15,7 +15,8 @@ jobs:
     name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      services: ${{ steps.filter.outputs.changes }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
       shared_changed: ${{ steps.filter.outputs.shared }}
     steps:
       - uses: actions/checkout@v4
@@ -49,24 +50,34 @@ jobs:
             notification-svc:
               - 'services/notification-svc/**'
 
+      - name: Compute Build Matrix
+        id: set-matrix
+        run: |
+          SHARED="${{ steps.filter.outputs.shared }}"
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          ALL='["gateway","merchant-svc","consent-svc","payment-svc","risk-svc","ledger-svc","bank-adapter","notification-svc"]'
+
+          if [ "$SHARED" = "true" ]; then
+            echo "matrix=$ALL" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          elif [ "$CHANGES" != "[]" ] && [ -n "$CHANGES" ]; then
+            echo "matrix=$CHANGES" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
   # ── 2. Fan-Out Matrix: Unit Test & Build Changed Services ──────────────────
   build-service:
     name: Build & Test (${{ matrix.service }})
     needs: detect-changes
     runs-on: ubuntu-latest
-    if: ${{ needs.detect-changes.outputs.shared_changed == 'true' || contains(needs.detect-changes.outputs.services, matrix.service) }}
+    if: needs.detect-changes.outputs.has_changes == 'true'
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - gateway
-          - merchant-svc
-          - consent-svc
-          - payment-svc
-          - risk-svc
-          - ledger-svc
-          - bank-adapter
-          - notification-svc
+        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
