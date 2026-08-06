@@ -9,8 +9,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	riskv1 "github.com/hozgan/vrp-demo/gen/risk/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	riskv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/risk/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 )
 
 // Handler implements risk.v1.RiskService.

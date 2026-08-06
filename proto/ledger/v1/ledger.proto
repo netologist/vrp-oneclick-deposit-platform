@@ -1,6 +1,6 @@
 syntax = "proto3";
 package ledger.v1;
-option go_package = "github.com/hozgan/vrp-demo/gen/ledger/v1;ledgerv1";
+option go_package = "github.com/netologist/vrp-oneclick-deposit-platform/gen/ledger/v1;ledgerv1";
 
 import "common/v1/common.proto";
 import "google/protobuf/empty.proto";

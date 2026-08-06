@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"golang.org/x/crypto/bcrypt"
 )
 

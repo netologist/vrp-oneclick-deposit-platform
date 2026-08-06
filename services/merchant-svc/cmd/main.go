@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"os"
 
-	merchantv1 "github.com/hozgan/vrp-demo/gen/merchant/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
-	"github.com/hozgan/vrp-demo/pkg/shared/db"
-	"github.com/hozgan/vrp-demo/pkg/shared/grpcutil"
-	"github.com/hozgan/vrp-demo/services/merchant-svc/internal"
+	merchantv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/db"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/grpcutil"
+	"github.com/netologist/vrp-oneclick-deposit-platform/services/merchant-svc/internal"
 )
 
 const serviceName = "merchant.v1.MerchantService"

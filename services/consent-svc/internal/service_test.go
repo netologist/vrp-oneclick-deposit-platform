@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"os"
 
-	ledgerv1 "github.com/hozgan/vrp-demo/gen/ledger/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
-	"github.com/hozgan/vrp-demo/pkg/shared/db"
-	"github.com/hozgan/vrp-demo/pkg/shared/grpcutil"
-	"github.com/hozgan/vrp-demo/services/ledger-svc/internal"
+	ledgerv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/ledger/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/db"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/grpcutil"
+	"github.com/netologist/vrp-oneclick-deposit-platform/services/ledger-svc/internal"
 )
 
 func main() {

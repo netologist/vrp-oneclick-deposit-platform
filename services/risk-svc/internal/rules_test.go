@@ -7,7 +7,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	commonv1 "github.com/hozgan/vrp-demo/gen/common/v1"
+	commonv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
 )
 
 func TestHighValueRule(t *testing.T) {

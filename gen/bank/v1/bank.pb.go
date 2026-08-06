@@ -7,7 +7,7 @@
 package bankv1
 
 import (
-	v1 "github.com/hozgan/vrp-demo/gen/common/v1"
+	v1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -484,7 +484,7 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\vBankAdapter\x12F\n" +
 	"\x0fInitiatePayment\x12\x18.bank.v1.InitiateRequest\x1a\x19.bank.v1.InitiateResponse\x12C\n" +
 	"\x10GetPaymentStatus\x12\x16.bank.v1.StatusRequest\x1a\x17.bank.v1.StatusResponse\x12C\n" +
-	"\x0eReversePayment\x12\x17.bank.v1.ReverseRequest\x1a\x18.bank.v1.ReverseResponseB/Z-github.com/hozgan/vrp-demo/gen/bank/v1;bankv1b\x06proto3"
+	"\x0eReversePayment\x12\x17.bank.v1.ReverseRequest\x1a\x18.bank.v1.ReverseResponseBHZFgithub.com/netologist/vrp-oneclick-deposit-platform/gen/bank/v1;bankv1b\x06proto3"
 
 var (
 	file_bank_v1_bank_proto_rawDescOnce sync.Once

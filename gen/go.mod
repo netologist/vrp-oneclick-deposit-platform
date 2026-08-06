@@ -1,4 +1,4 @@
-module github.com/hozgan/vrp-demo/gen
+module github.com/netologist/vrp-oneclick-deposit-platform/gen
 
 go 1.26.2
 

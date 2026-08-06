@@ -3,7 +3,7 @@ package money_test
 import (
 	"testing"
 
-	"github.com/hozgan/vrp-demo/pkg/shared/money"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/money"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

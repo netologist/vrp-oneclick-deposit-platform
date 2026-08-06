@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
 )
 
 type paymentRecord struct {

@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"os"
 
-	consentv1 "github.com/hozgan/vrp-demo/gen/consent/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
-	"github.com/hozgan/vrp-demo/pkg/shared/db"
-	"github.com/hozgan/vrp-demo/pkg/shared/grpcutil"
-	"github.com/hozgan/vrp-demo/services/consent-svc/internal"
+	consentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/db"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/grpcutil"
+	"github.com/netologist/vrp-oneclick-deposit-platform/services/consent-svc/internal"
 	"github.com/redis/go-redis/v9"
 )
 

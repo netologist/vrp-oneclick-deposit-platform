@@ -8,8 +8,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	commonv1 "github.com/hozgan/vrp-demo/gen/common/v1"
-	riskv1 "github.com/hozgan/vrp-demo/gen/risk/v1"
+	commonv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
+	riskv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/risk/v1"
 )
 
 // Decision is the outcome of a single rule or the merged engine result.

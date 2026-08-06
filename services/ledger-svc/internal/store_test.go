@@ -3,7 +3,7 @@ package internal
 import (
 	"testing"
 
-	ledgerv1 "github.com/hozgan/vrp-demo/gen/ledger/v1"
+	ledgerv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/ledger/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -519,7 +519,7 @@ const file_merchant_v1_merchant_proto_rawDesc = "" +
 	"\vGetMerchant\x12\x1f.merchant.v1.GetMerchantRequest\x1a\x15.merchant.v1.Merchant\x12M\n" +
 	"\x0fSuspendMerchant\x12#.merchant.v1.SuspendMerchantRequest\x1a\x15.merchant.v1.Merchant\x12U\n" +
 	"\x13GetMerchantByApiKey\x12'.merchant.v1.GetMerchantByApiKeyRequest\x1a\x15.merchant.v1.Merchant\x12T\n" +
-	"\x10GetWebhookConfig\x12$.merchant.v1.GetWebhookConfigRequest\x1a\x1a.merchant.v1.WebhookConfigB7Z5github.com/hozgan/vrp-demo/gen/merchant/v1;merchantv1b\x06proto3"
+	"\x10GetWebhookConfig\x12$.merchant.v1.GetWebhookConfigRequest\x1a\x1a.merchant.v1.WebhookConfigBPZNgithub.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1;merchantv1b\x06proto3"
 
 var (
 	file_merchant_v1_merchant_proto_rawDescOnce sync.Once

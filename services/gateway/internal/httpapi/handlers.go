@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	commonv1 "github.com/hozgan/vrp-demo/gen/common/v1"
-	consentv1 "github.com/hozgan/vrp-demo/gen/consent/v1"
-	merchantv1 "github.com/hozgan/vrp-demo/gen/merchant/v1"
-	paymentv1 "github.com/hozgan/vrp-demo/gen/payment/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/auth"
+	commonv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
+	consentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1"
+	merchantv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1"
+	paymentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/payment/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/auth"
 )
 
 type Handlers struct {

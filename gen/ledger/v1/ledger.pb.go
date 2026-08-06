@@ -7,7 +7,7 @@
 package ledgerv1
 
 import (
-	v1 "github.com/hozgan/vrp-demo/gen/common/v1"
+	v1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -597,7 +597,7 @@ const file_ledger_v1_ledger_proto_rawDesc = "" +
 	"\fReverseEntry\x12\x19.ledger.v1.ReverseRequest\x1a\x16.google.protobuf.Empty\x12C\n" +
 	"\n" +
 	"GetBalance\x12\x19.ledger.v1.BalanceRequest\x1a\x1a.ledger.v1.BalanceResponse\x12J\n" +
-	"\x0fGetJournalEntry\x12\x1e.ledger.v1.JournalEntryRequest\x1a\x17.ledger.v1.JournalEntryB3Z1github.com/hozgan/vrp-demo/gen/ledger/v1;ledgerv1b\x06proto3"
+	"\x0fGetJournalEntry\x12\x1e.ledger.v1.JournalEntryRequest\x1a\x17.ledger.v1.JournalEntryBLZJgithub.com/netologist/vrp-oneclick-deposit-platform/gen/ledger/v1;ledgerv1b\x06proto3"
 
 var (
 	file_ledger_v1_ledger_proto_rawDescOnce sync.Once

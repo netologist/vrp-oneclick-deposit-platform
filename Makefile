@@ -2,7 +2,7 @@
 
 export PATH := $(PATH):$(HOME)/go/bin:$(shell go env GOPATH)/bin
 
-MODULE_ROOT := github.com/hozgan/vrp-demo
+MODULE_ROOT := github.com/netologist/vrp-oneclick-deposit-platform
 
 proto:
 	cd proto && buf generate

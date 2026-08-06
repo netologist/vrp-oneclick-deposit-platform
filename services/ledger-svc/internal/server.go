@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 
-	ledgerv1 "github.com/hozgan/vrp-demo/gen/ledger/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	ledgerv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/ledger/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

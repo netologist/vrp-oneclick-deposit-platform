@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hozgan/vrp-demo/pkg/shared/webhook"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/webhook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -7,7 +7,7 @@
 package consentv1
 
 import (
-	v1 "github.com/hozgan/vrp-demo/gen/common/v1"
+	v1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -953,7 +953,7 @@ const file_consent_v1_consent_proto_rawDesc = "" +
 	"\x12ValidateAndReserve\x12\x1a.consent.v1.ReserveRequest\x1a\x1b.consent.v1.ReserveResponse\x12H\n" +
 	"\x12ConfirmReservation\x12\x1a.consent.v1.ConfirmRequest\x1a\x16.google.protobuf.Empty\x12H\n" +
 	"\x12ReleaseReservation\x12\x1a.consent.v1.ReleaseRequest\x1a\x16.google.protobuf.Empty\x12F\n" +
-	"\x0fGetRollingUsage\x12\x18.consent.v1.UsageRequest\x1a\x19.consent.v1.UsageResponseB5Z3github.com/hozgan/vrp-demo/gen/consent/v1;consentv1b\x06proto3"
+	"\x0fGetRollingUsage\x12\x18.consent.v1.UsageRequest\x1a\x19.consent.v1.UsageResponseBNZLgithub.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1;consentv1b\x06proto3"
 
 var (
 	file_consent_v1_consent_proto_rawDescOnce sync.Once

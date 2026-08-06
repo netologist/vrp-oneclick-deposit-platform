@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	consentv1 "github.com/hozgan/vrp-demo/gen/consent/v1"
-	merchantv1 "github.com/hozgan/vrp-demo/gen/merchant/v1"
-	paymentv1 "github.com/hozgan/vrp-demo/gen/payment/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/auth"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
-	"github.com/hozgan/vrp-demo/pkg/shared/grpcutil"
-	"github.com/hozgan/vrp-demo/services/gateway/internal/httpapi"
+	consentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1"
+	merchantv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1"
+	paymentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/payment/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/auth"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/grpcutil"
+	"github.com/netologist/vrp-oneclick-deposit-platform/services/gateway/internal/httpapi"
 	"github.com/redis/go-redis/v9"
 )
 

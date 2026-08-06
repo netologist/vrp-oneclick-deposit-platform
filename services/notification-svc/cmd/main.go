@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	merchantv1 "github.com/hozgan/vrp-demo/gen/merchant/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
-	"github.com/hozgan/vrp-demo/pkg/shared/grpcutil"
-	"github.com/hozgan/vrp-demo/services/notification-svc/internal"
+	merchantv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/grpcutil"
+	"github.com/netologist/vrp-oneclick-deposit-platform/services/notification-svc/internal"
 	"github.com/redis/go-redis/v9"
 )
 

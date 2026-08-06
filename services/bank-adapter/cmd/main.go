@@ -8,11 +8,11 @@ import (
 	"syscall"
 	"time"
 
-	bankv1 "github.com/hozgan/vrp-demo/gen/bank/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
-	"github.com/hozgan/vrp-demo/pkg/shared/grpcutil"
-	svc "github.com/hozgan/vrp-demo/services/bank-adapter/internal"
-	"github.com/hozgan/vrp-demo/services/bank-adapter/internal/mockbank"
+	bankv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/bank/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/grpcutil"
+	svc "github.com/netologist/vrp-oneclick-deposit-platform/services/bank-adapter/internal"
+	"github.com/netologist/vrp-oneclick-deposit-platform/services/bank-adapter/internal/mockbank"
 )
 
 func main() {

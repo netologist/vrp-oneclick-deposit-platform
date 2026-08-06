@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	merchantv1 "github.com/hozgan/vrp-demo/gen/merchant/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/webhook"
+	merchantv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/webhook"
 	"github.com/segmentio/kafka-go"
 )
 

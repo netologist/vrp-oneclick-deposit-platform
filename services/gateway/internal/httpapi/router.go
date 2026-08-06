@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/hozgan/vrp-demo/pkg/shared/auth"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/auth"
 	"github.com/redis/go-redis/v9"
 )
 

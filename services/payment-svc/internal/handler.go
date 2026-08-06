@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	commonv1 "github.com/hozgan/vrp-demo/gen/common/v1"
-	paymentv1 "github.com/hozgan/vrp-demo/gen/payment/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	commonv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
+	paymentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/payment/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

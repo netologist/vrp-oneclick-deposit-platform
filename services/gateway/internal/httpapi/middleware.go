@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hozgan/vrp-demo/pkg/shared/auth"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/auth"
 	"github.com/redis/go-redis/v9"
 )
 

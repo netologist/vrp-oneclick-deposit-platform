@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	commonv1 "github.com/hozgan/vrp-demo/gen/common/v1"
-	consentv1 "github.com/hozgan/vrp-demo/gen/consent/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	commonv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
+	consentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

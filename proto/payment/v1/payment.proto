@@ -1,6 +1,6 @@
 syntax = "proto3";
 package payment.v1;
-option go_package = "github.com/hozgan/vrp-demo/gen/payment/v1;paymentv1";
+option go_package = "github.com/netologist/vrp-oneclick-deposit-platform/gen/payment/v1;paymentv1";
 
 import "common/v1/common.proto";
 import "google/protobuf/timestamp.proto";

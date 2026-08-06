@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/hozgan/vrp-demo/pkg/shared/idempotency"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/idempotency"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -1,6 +1,6 @@
 syntax = "proto3";
 package common.v1;
-option go_package = "github.com/hozgan/vrp-demo/gen/common/v1;commonv1";
+option go_package = "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1;commonv1";
 
 // Money is always stored as pence/cents (integer) + ISO 4217 currency code.
 // NEVER use float or double for monetary values.

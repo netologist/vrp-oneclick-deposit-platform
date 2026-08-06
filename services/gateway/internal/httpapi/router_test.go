@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hozgan/vrp-demo/pkg/shared/auth"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/auth"
 	"github.com/stretchr/testify/assert"
 )
 

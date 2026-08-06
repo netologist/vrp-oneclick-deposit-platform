@@ -7,7 +7,7 @@
 package riskv1
 
 import (
-	v1 "github.com/hozgan/vrp-demo/gen/common/v1"
+	v1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -415,7 +415,7 @@ const file_risk_v1_risk_proto_rawDesc = "" +
 	"\vRiskService\x126\n" +
 	"\x05Score\x12\x15.risk.v1.ScoreRequest\x1a\x16.risk.v1.ScoreResponse\x12D\n" +
 	"\x0eAddToBlocklist\x12\x19.risk.v1.BlocklistRequest\x1a\x17.risk.v1.BlocklistEntry\x12I\n" +
-	"\x13RemoveFromBlocklist\x12\x19.risk.v1.BlocklistRequest\x1a\x17.risk.v1.BlocklistEntryB/Z-github.com/hozgan/vrp-demo/gen/risk/v1;riskv1b\x06proto3"
+	"\x13RemoveFromBlocklist\x12\x19.risk.v1.BlocklistRequest\x1a\x17.risk.v1.BlocklistEntryBHZFgithub.com/netologist/vrp-oneclick-deposit-platform/gen/risk/v1;riskv1b\x06proto3"
 
 var (
 	file_risk_v1_risk_proto_rawDescOnce sync.Once

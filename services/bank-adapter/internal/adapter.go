@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/avast/retry-go/v4"
-	bankv1 "github.com/hozgan/vrp-demo/gen/bank/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	bankv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/bank/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"github.com/sony/gobreaker"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 
-	merchantv1 "github.com/hozgan/vrp-demo/gen/merchant/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/domainerr"
+	merchantv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

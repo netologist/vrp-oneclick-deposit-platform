@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/hozgan/vrp-demo/pkg/shared/auth"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

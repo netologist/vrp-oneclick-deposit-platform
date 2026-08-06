@@ -194,7 +194,7 @@ const file_common_v1_common_proto_rawDesc = "" +
 	"\fPageResponse\x12&\n" +
 	"\x0fnext_page_token\x18\x01 \x01(\tR\rnextPageToken\x12\x1f\n" +
 	"\vtotal_count\x18\x02 \x01(\x05R\n" +
-	"totalCountB3Z1github.com/hozgan/vrp-demo/gen/common/v1;commonv1b\x06proto3"
+	"totalCountBLZJgithub.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1;commonv1b\x06proto3"
 
 var (
 	file_common_v1_common_proto_rawDescOnce sync.Once

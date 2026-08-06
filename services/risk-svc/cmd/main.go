@@ -7,10 +7,10 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	riskv1 "github.com/hozgan/vrp-demo/gen/risk/v1"
-	"github.com/hozgan/vrp-demo/pkg/shared/config"
-	"github.com/hozgan/vrp-demo/pkg/shared/grpcutil"
-	"github.com/hozgan/vrp-demo/services/risk-svc/internal"
+	riskv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/risk/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/grpcutil"
+	"github.com/netologist/vrp-oneclick-deposit-platform/services/risk-svc/internal"
 )
 
 func main() {

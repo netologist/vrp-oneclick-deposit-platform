@@ -1,6 +1,6 @@
 syntax = "proto3";
 package risk.v1;
-option go_package = "github.com/hozgan/vrp-demo/gen/risk/v1;riskv1";
+option go_package = "github.com/netologist/vrp-oneclick-deposit-platform/gen/risk/v1;riskv1";
 
 import "common/v1/common.proto";
 import "google/protobuf/timestamp.proto";

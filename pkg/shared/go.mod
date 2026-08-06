@@ -1,4 +1,4 @@
-module github.com/hozgan/vrp-demo/pkg/shared
+module github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared
 
 go 1.25.0
 

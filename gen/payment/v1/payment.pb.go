@@ -7,7 +7,7 @@
 package paymentv1
 
 import (
-	v1 "github.com/hozgan/vrp-demo/gen/common/v1"
+	v1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -484,7 +484,7 @@ const file_payment_v1_payment_proto_rawDesc = "" +
 	"\x0fInitiatePayment\x12\".payment.v1.InitiatePaymentRequest\x1a\x13.payment.v1.Payment\x12@\n" +
 	"\n" +
 	"GetPayment\x12\x1d.payment.v1.GetPaymentRequest\x1a\x13.payment.v1.Payment\x12D\n" +
-	"\fRetryPayment\x12\x1f.payment.v1.RetryPaymentRequest\x1a\x13.payment.v1.PaymentB5Z3github.com/hozgan/vrp-demo/gen/payment/v1;paymentv1b\x06proto3"
+	"\fRetryPayment\x12\x1f.payment.v1.RetryPaymentRequest\x1a\x13.payment.v1.PaymentBNZLgithub.com/netologist/vrp-oneclick-deposit-platform/gen/payment/v1;paymentv1b\x06proto3"
 
 var (
 	file_payment_v1_payment_proto_rawDescOnce sync.Once
