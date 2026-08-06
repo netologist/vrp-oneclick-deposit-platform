@@ -18,6 +18,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_changes: ${{ steps.set-matrix.outputs.has_changes }}
       shared_changed: ${{ steps.filter.outputs.shared }}
+      docs_changed: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +33,9 @@ jobs:
               - 'go.work*'
               - 'Makefile'
               - 'Dockerfile'
-              - '.github/workflows/**'
+            docs:
+              - 'docs/**'
+              - 'mkdocs.yml'
             gateway:
               - 'services/gateway/**'
             merchant-svc:
@@ -122,7 +125,7 @@ jobs:
   e2e-kind:
     name: Kind Cluster E2E Acceptance Test
     needs: [detect-changes, build-service]
-    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    if: needs.detect-changes.outputs.has_changes == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -198,7 +201,19 @@ jobs:
   # ── 4. MkDocs Build & GitHub Pages Deploy ─────────────────────────────────
   build-docs:
     name: Build & Deploy MkDocs Documentation
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs_changed == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: "pages-${{ github.ref }}"
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -211,20 +226,19 @@ jobs:
         run: |
           pip install mkdocs mkdocs-material pymdown-extensions
 
-      - name: Configure Git for MkDocs Deploy
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: Build MkDocs Site
         env:
           NO_MKDOCS_2_WARNING: "1"
         run: |
           mkdocs build --strict
 
+      - name: Upload Pages Artifact
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
       - name: Deploy to GitHub Pages
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        env:
-          NO_MKDOCS_2_WARNING: "1"
-        run: |
-          mkdocs gh-deploy --force
+        id: deployment
+        uses: actions/deploy-pages@v4
