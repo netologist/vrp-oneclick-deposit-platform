@@ -1,0 +1,56 @@
+# Zero-Trust Authorization Policy for Ledger Service (only Payment Service can invoke ledger)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ledger-svc-access
+  namespace: vrp-demo
+spec:
+  selector:
+    matchLabels:
+      app: ledger-svc
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/vrp-demo/sa/vrp-svc-account"]
+      to:
+        - operation:
+            ports: ["50055"]
+---
+# Zero-Trust Authorization Policy for Bank Adapter (only Payment Service can invoke bank adapter)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: bank-adapter-access
+  namespace: vrp-demo
+spec:
+  selector:
+    matchLabels:
+      app: bank-adapter
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/vrp-demo/sa/vrp-svc-account"]
+      to:
+        - operation:
+            ports: ["50056"]
+---
+# Zero-Trust Authorization Policy for Risk Service (only Payment Service can invoke risk service)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: risk-svc-access
+  namespace: vrp-demo
+spec:
+  selector:
+    matchLabels:
+      app: risk-svc
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/vrp-demo/sa/vrp-svc-account"]
+      to:
+        - operation:
+            ports: ["50054"]
