@@ -5,14 +5,17 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/logutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 )
@@ -80,6 +83,21 @@ func (s *Server) Serve(ctx context.Context) error {
 func LoggingUnary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
+
+		// Extract incoming metadata (x-request-id, traceparent) and enrich context
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if reqIDs := md.Get("x-request-id"); len(reqIDs) > 0 && reqIDs[0] != "" {
+				ctx = logutil.WithRequestID(ctx, reqIDs[0])
+			}
+			if tp := md.Get("traceparent"); len(tp) > 0 && tp[0] != "" {
+				// W3C traceparent format: 00-<trace_id>-<span_id>-<flags>
+				parts := strings.Split(tp[0], "-")
+				if len(parts) >= 3 {
+					ctx = logutil.WithTraceContext(ctx, parts[1], parts[2])
+				}
+			}
+		}
+
 		resp, err := handler(ctx, req)
 		level := slog.LevelInfo
 		attrs := []any{

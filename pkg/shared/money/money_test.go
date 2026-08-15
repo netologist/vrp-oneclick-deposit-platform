@@ -55,6 +55,12 @@ func TestNew(t *testing.T) {
 			wantErr:     "currency must be 3-letter ISO code",
 		},
 		{
+			name:        "non-alpha currency rejected",
+			amountPence: 100,
+			currency:    "1GB",
+			wantErr:     "currency must be 3-letter ISO code",
+		},
+		{
 			name:        "empty currency rejected",
 			amountPence: 100,
 			currency:    "",
@@ -128,10 +134,67 @@ func TestMoney_String(t *testing.T) {
 	}
 }
 
-func TestMoney_IsZero(t *testing.T) {
+func TestMoney_IsZeroAndIsPositive(t *testing.T) {
 	t.Parallel()
 
 	assert.True(t, money.Money{}.IsZero())
 	assert.True(t, money.Money{AmountPence: 0, Currency: "GBP"}.IsZero())
 	assert.False(t, money.Money{AmountPence: 1, Currency: "GBP"}.IsZero())
+
+	assert.False(t, money.Money{AmountPence: 0, Currency: "GBP"}.IsPositive())
+	assert.True(t, money.Money{AmountPence: 50, Currency: "GBP"}.IsPositive())
+	assert.False(t, money.Money{AmountPence: -10, Currency: "GBP"}.IsPositive())
+}
+
+func TestMoney_EqualAndSameCurrency(t *testing.T) {
+	t.Parallel()
+
+	m1 := money.Money{AmountPence: 100, Currency: "GBP"}
+	m2 := money.Money{AmountPence: 100, Currency: "GBP"}
+	m3 := money.Money{AmountPence: 200, Currency: "GBP"}
+	m4 := money.Money{AmountPence: 100, Currency: "EUR"}
+
+	assert.True(t, m1.Equal(m2))
+	assert.False(t, m1.Equal(m3))
+	assert.False(t, m1.Equal(m4))
+
+	assert.True(t, m1.SameCurrency(m3))
+	assert.False(t, m1.SameCurrency(m4))
+}
+
+func TestMoney_Add(t *testing.T) {
+	t.Parallel()
+
+	m1 := money.Money{AmountPence: 1000, Currency: "GBP"}
+	m2 := money.Money{AmountPence: 550, Currency: "GBP"}
+	mOther := money.Money{AmountPence: 550, Currency: "EUR"}
+
+	sum, err := m1.Add(m2)
+	require.NoError(t, err)
+	assert.Equal(t, money.Money{AmountPence: 1550, Currency: "GBP"}, sum)
+
+	_, err = m1.Add(mOther)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "currency mismatch")
+}
+
+func TestMoney_Sub(t *testing.T) {
+	t.Parallel()
+
+	m1 := money.Money{AmountPence: 1000, Currency: "GBP"}
+	m2 := money.Money{AmountPence: 450, Currency: "GBP"}
+	mBigger := money.Money{AmountPence: 1500, Currency: "GBP"}
+	mOther := money.Money{AmountPence: 450, Currency: "USD"}
+
+	diff, err := m1.Sub(m2)
+	require.NoError(t, err)
+	assert.Equal(t, money.Money{AmountPence: 550, Currency: "GBP"}, diff)
+
+	_, err = m1.Sub(mBigger)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "results in negative amount")
+
+	_, err = m1.Sub(mOther)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "currency mismatch")
 }

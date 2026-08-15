@@ -125,6 +125,44 @@ SELECT id, idempotency_key, merchant_id, consent_id, consumer_id,
 FROM payment WHERE idempotency_key = $1`, key)
 }
 
+// ListStaleInFlightPayments returns payments stuck in intermediate non-terminal states older than staleAfter.
+func (r *Repo) ListStaleInFlightPayments(ctx context.Context, staleAfter time.Duration) ([]*Payment, error) {
+	threshold := time.Now().UTC().Add(-staleAfter)
+	const q = `
+SELECT id, idempotency_key, merchant_id, consent_id, consumer_id,
+       amount_pence, currency, status, COALESCE(bank_payment_ref,''),
+       reservation_id, risk_score, COALESCE(risk_decision,''),
+       COALESCE(failure_reason,''), COALESCE(description,''),
+       initiated_at, settled_at, updated_at
+FROM payment
+WHERE status IN ('INITIATED', 'CONSENT_RESERVED', 'RISK_PASSED', 'AUTHORISING')
+  AND updated_at < $1
+ORDER BY updated_at ASC
+LIMIT 50`
+
+	rows, err := r.pool.Query(ctx, q, threshold)
+	if err != nil {
+		return nil, domainerr.Wrap(domainerr.CodeInternal, "list stale payments", err)
+	}
+	defer rows.Close()
+
+	var list []*Payment
+	for rows.Next() {
+		var p Payment
+		if err := rows.Scan(
+			&p.ID, &p.IdempotencyKey, &p.MerchantID, &p.ConsentID, &p.ConsumerID,
+			&p.AmountPence, &p.Currency, &p.Status, &p.BankPaymentRef,
+			&p.ReservationID, &p.RiskScore, &p.RiskDecision,
+			&p.FailureReason, &p.Description,
+			&p.InitiatedAt, &p.SettledAt, &p.UpdatedAt,
+		); err != nil {
+			return nil, domainerr.Wrap(domainerr.CodeInternal, "scan stale payment", err)
+		}
+		list = append(list, &p)
+	}
+	return list, rows.Err()
+}
+
 func (r *Repo) scanOne(ctx context.Context, q string, args ...any) (*Payment, error) {
 	var p Payment
 	err := r.pool.QueryRow(ctx, q, args...).Scan(

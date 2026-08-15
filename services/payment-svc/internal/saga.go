@@ -16,8 +16,6 @@ import (
 	riskv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/risk/v1"
 	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/idempotency"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -362,6 +360,70 @@ func (o *Orchestrator) runSaga(ctx context.Context, p *Payment) error {
 	return nil
 }
 
+// ResumeFromLedger resumes an in-flight saga from Step 4 (Ledger double-entry),
+// used by the ReconciliationWorker when a payment was already authorised/settled at the bank.
+func (o *Orchestrator) ResumeFromLedger(ctx context.Context, p *Payment) error {
+	fee := platformFee(p.AmountPence)
+	merchantAmt := p.AmountPence - fee
+
+	_, err := o.ledger.PostDoubleEntry(ctx, &ledgerv1.PostEntryRequest{
+		PaymentId:   p.ID.String(),
+		Description: fmt.Sprintf("VRP settlement %s (reconciled)", p.ID.String()),
+		Lines: []*ledgerv1.JournalLine{
+			{
+				AccountType: ledgerv1.AccountType_CONSUMER_ESCROW,
+				OwnerRef:    p.ConsumerID,
+				Direction:   ledgerv1.Direction_DR,
+				Amount:      &commonv1.Money{AmountPence: p.AmountPence, Currency: p.Currency},
+			},
+			{
+				AccountType: ledgerv1.AccountType_MERCHANT_ESCROW,
+				OwnerRef:    p.MerchantID.String(),
+				Direction:   ledgerv1.Direction_CR,
+				Amount:      &commonv1.Money{AmountPence: merchantAmt, Currency: p.Currency},
+			},
+			{
+				AccountType: ledgerv1.AccountType_PLATFORM_FEE,
+				OwnerRef:    platformOwnerRef,
+				Direction:   ledgerv1.Direction_CR,
+				Amount:      &commonv1.Money{AmountPence: fee, Currency: p.Currency},
+			},
+		},
+	})
+	if err != nil {
+		return o.failAndCompensate(ctx, p, "RECONCILIATION_LEDGER_ERROR: "+err.Error(), true, true, mapDownstreamErr(err))
+	}
+
+	if err := o.repo.SettleWithOutbox(ctx, p); err != nil {
+		if cerr := o.compensateFull(ctx, p, "reconciled settle failed"); cerr != nil {
+			_ = o.repo.MarkManualReview(ctx, p, "reconciled settle failed; compensate failed: "+cerr.Error())
+			return domainerr.Wrap(domainerr.CodeInternal, "settle and compensate failed", err)
+		}
+		_ = o.repo.MarkFailed(ctx, p, "SETTLE_FAILED: "+err.Error())
+		return err
+	}
+
+	if p.ReservationID != nil {
+		_, err = o.consent.ConfirmReservation(ctx, &consentv1.ConfirmRequest{
+			ReservationId: p.ReservationID.String(),
+			PaymentId:     p.ID.String(),
+		})
+		if err != nil {
+			slog.WarnContext(ctx, "reconciliation confirm reservation non-fatal error", "err", err, "payment_id", p.ID)
+		}
+	}
+
+	_ = o.idem.Complete(ctx, p.IdempotencyKey, p.ID.String())
+	return nil
+}
+
+// CompensateStale cancels a stuck in-flight payment and triggers compensation rollbacks.
+func (o *Orchestrator) CompensateStale(ctx context.Context, p *Payment, reason string) error {
+	hasBank := p.BankPaymentRef != ""
+	hasConsent := p.ReservationID != nil
+	return o.failAndCompensate(ctx, p, reason, hasConsent, hasBank, nil)
+}
+
 func (o *Orchestrator) failAndCompensate(ctx context.Context, p *Payment, reason string, releaseConsent, reverseBank bool, retErr error) error {
 	if err := o.compensate(ctx, p, reason, releaseConsent, reverseBank); err != nil {
 		_ = o.repo.MarkManualReview(ctx, p, reason+"; compensate failed: "+err.Error())
@@ -447,42 +509,12 @@ func mapDownstreamErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	if _, ok := asDomain(err); ok {
-		return err
+	if de, ok := asDomain(err); ok {
+		return de
 	}
-	st, ok := status.FromError(err)
-	if !ok {
-		return domainerr.Wrap(domainerr.CodeInternal, "downstream error", err)
+	if de := domainerr.FromGRPC(err); de != nil {
+		de.Err = err
+		return de
 	}
-	msg := st.Message()
-	code := domainerr.CodeInternal
-	// Messages often look like "CONSENT_LIMIT_EXCEEDED: ..."
-	upper := strings.ToUpper(msg)
-	switch {
-	case strings.Contains(upper, string(domainerr.CodeConsentLimitExceeded)):
-		code = domainerr.CodeConsentLimitExceeded
-	case strings.Contains(upper, string(domainerr.CodeConsentExpired)):
-		code = domainerr.CodeConsentExpired
-	case strings.Contains(upper, string(domainerr.CodeConsentRevoked)):
-		code = domainerr.CodeConsentRevoked
-	case strings.Contains(upper, string(domainerr.CodeConsentInactive)):
-		code = domainerr.CodeConsentInactive
-	case strings.Contains(upper, string(domainerr.CodeRiskDeclined)):
-		code = domainerr.CodeRiskDeclined
-	case strings.Contains(upper, string(domainerr.CodeBankRejected)):
-		code = domainerr.CodeBankRejected
-	case strings.Contains(upper, string(domainerr.CodeBankUnavailable)):
-		code = domainerr.CodeBankUnavailable
-	case strings.Contains(upper, string(domainerr.CodeMerchantSuspended)):
-		code = domainerr.CodeMerchantSuspended
-	case st.Code() == codes.NotFound:
-		code = domainerr.CodeNotFound
-	case st.Code() == codes.InvalidArgument:
-		code = domainerr.CodeValidation
-	case st.Code() == codes.Unavailable:
-		code = domainerr.CodeBankUnavailable
-	case st.Code() == codes.FailedPrecondition:
-		code = domainerr.CodeConflict
-	}
-	return domainerr.Wrap(code, msg, err)
+	return domainerr.Wrap(domainerr.CodeInternal, "downstream error", err)
 }
