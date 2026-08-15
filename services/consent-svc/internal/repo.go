@@ -117,16 +117,11 @@ func (r *Repo) ListConsents(ctx context.Context, consumerID, merchantID, status 
 		n++
 	}
 
-	var total int
-	countQ := "SELECT COUNT(*) FROM consent " + where
-	if err := r.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count consents: %w", err)
-	}
-
 	listQ := fmt.Sprintf(`
 		SELECT id, merchant_id, consumer_id, bank_consent_ref, status,
 		       max_amount_pence, max_monthly_pence, currency,
-		       valid_from, valid_until, created_at, updated_at
+		       valid_from, valid_until, created_at, updated_at,
+		       COUNT(*) OVER() AS total_count
 		FROM consent %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -139,6 +134,7 @@ func (r *Repo) ListConsents(ctx context.Context, consumerID, merchantID, status 
 	}
 	defer rows.Close()
 
+	var total int
 	out := make([]ConsentRow, 0, limit)
 	for rows.Next() {
 		var c ConsentRow
@@ -146,6 +142,7 @@ func (r *Repo) ListConsents(ctx context.Context, consumerID, merchantID, status 
 			&c.ID, &c.MerchantID, &c.ConsumerID, &c.BankConsentRef, &c.Status,
 			&c.MaxAmountPence, &c.MaxMonthlyPence, &c.Currency,
 			&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt,
+			&total,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan consent: %w", err)
 		}

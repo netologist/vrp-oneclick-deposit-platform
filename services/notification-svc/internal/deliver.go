@@ -55,13 +55,27 @@ func (e PaymentEvent) PaymentKey() string {
 	return e.PaymentID
 }
 
+// WebhookPaymentData represents the strongly-typed payment payload inside a webhook.
+type WebhookPaymentData struct {
+	ID             string `json:"id"`
+	MerchantID     string `json:"merchant_id"`
+	ConsentID      string `json:"consent_id"`
+	ConsumerID     string `json:"consumer_id"`
+	AmountPence    int64  `json:"amount_pence"`
+	Currency       string `json:"currency"`
+	Status         string `json:"status"`
+	BankPaymentRef string `json:"bank_payment_ref,omitempty"`
+	RiskScore      int32  `json:"risk_score,omitempty"`
+	RiskDecision   string `json:"risk_decision,omitempty"`
+	SettledAt      string `json:"settled_at,omitempty"`
+	Description    string `json:"description,omitempty"`
+}
 // WebhookBody is POSTed to the merchant webhook URL.
 type WebhookBody struct {
-	EventType   string         `json:"event_type"`
-	Payment     map[string]any `json:"payment"`
-	DeliveredAt string         `json:"delivered_at"`
+	EventType   string             `json:"event_type"`
+	Payment     WebhookPaymentData `json:"payment"`
+	DeliveredAt string             `json:"delivered_at"`
 }
-
 // DLQPayload is published to webhook.dlq after exhausted retries.
 type DLQPayload struct {
 	MerchantID string          `json:"merchant_id"`
@@ -164,33 +178,37 @@ func (d *Deliverer) Deliver(ctx context.Context, evt PaymentEvent, raw []byte) e
 
 func buildWebhookBody(evt PaymentEvent) ([]byte, error) {
 	paymentID := evt.PaymentKey()
-	payment := map[string]any{
-		"id":               paymentID,
-		"merchant_id":      evt.MerchantID,
-		"consent_id":       evt.ConsentID,
-		"consumer_id":      evt.ConsumerID,
-		"amount_pence":     evt.AmountPence,
-		"currency":         evt.Currency,
-		"status":           evt.Status,
-		"bank_payment_ref": evt.BankPaymentRef,
-		"description":      evt.Description,
-		"risk_score":       evt.RiskScore,
-		"risk_decision":    evt.RiskDecision,
-		"initiated_at":     evt.InitiatedAt,
-		"settled_at":       evt.SettledAt,
+	currency := evt.Currency
+	if currency == "" {
+		currency = "GBP"
 	}
-	eventType := evt.EventType
-	if eventType == "" {
-		eventType = "payment.settled"
+	status := evt.Status
+	if status == "" {
+		status = "SETTLED"
 	}
+
+	pData := WebhookPaymentData{
+		ID:             paymentID,
+		MerchantID:     evt.MerchantID,
+		ConsentID:      evt.ConsentID,
+		ConsumerID:     evt.ConsumerID,
+		AmountPence:    evt.AmountPence,
+		Currency:       currency,
+		Status:         status,
+		BankPaymentRef: evt.BankPaymentRef,
+		RiskScore:      evt.RiskScore,
+		RiskDecision:   evt.RiskDecision,
+		SettledAt:      evt.SettledAt,
+		Description:    evt.Description,
+	}
+
 	wb := WebhookBody{
-		EventType:   eventType,
-		Payment:     payment,
+		EventType:   "payment.settled",
+		Payment:     pData,
 		DeliveredAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	return json.Marshal(wb)
 }
-
 func (d *Deliverer) postWebhook(ctx context.Context, url, secret string, body []byte) error {
 	ts := time.Now().UTC()
 	sig := webhook.Sign(secret, ts, body)
