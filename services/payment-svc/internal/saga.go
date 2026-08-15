@@ -261,7 +261,8 @@ func (o *Orchestrator) runSaga(ctx context.Context, p *Payment) error {
 	decision := scoreResp.GetDecision()
 	decisionName := decision.String()
 	if decision == riskv1.RiskDecision_DECLINE {
-		p.RiskScore = new(scoreResp.GetScore())
+		riskScore := scoreResp.GetScore()
+		p.RiskScore = &riskScore
 		p.RiskDecision = decisionName
 		return o.failAndCompensate(ctx, p, "RISK_DECLINED: "+scoreResp.GetReason(), true, false,
 			domainerr.New(domainerr.CodeRiskDeclined, scoreResp.GetReason()))
