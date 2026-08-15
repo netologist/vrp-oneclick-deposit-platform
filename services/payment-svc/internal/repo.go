@@ -334,7 +334,8 @@ func (r *Repo) ListOutbox(ctx context.Context, limit int) ([]OutboxRow, error) {
 SELECT id, topic, key, payload, created_at
 FROM outbox
 ORDER BY created_at ASC
-LIMIT $1`, limit)
+LIMIT $1
+FOR UPDATE SKIP LOCKED`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list outbox: %w", err)
 	}

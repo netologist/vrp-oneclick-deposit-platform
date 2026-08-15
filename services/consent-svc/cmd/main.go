@@ -4,6 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
 	consentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1"
 	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
@@ -14,9 +17,13 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(config.Get("LOG_LEVEL", "info")),
+	})))
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	dbURL := config.Get("CONSENT_DB_URL", "postgres://vrp:vrp@localhost:5432/consent?sslmode=disable")
 	addr := config.Get("CONSENT_GRPC_ADDR", ":50052")
 	redisAddr := config.Get("REDIS_ADDR", "localhost:6379")
@@ -51,5 +58,18 @@ func main() {
 	if err := srv.Serve(ctx); err != nil {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
+	}
+}
+
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
 }

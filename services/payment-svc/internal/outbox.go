@@ -19,7 +19,7 @@ func NewOutboxRelay(repo *Repo, brokers []string) *OutboxRelay {
 	w := &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
 		Balancer:     &kafka.LeastBytes{},
-		RequiredAcks: kafka.RequireOne,
+		RequiredAcks: kafka.RequireAll,
 		Async:        false,
 	}
 	return &OutboxRelay{
