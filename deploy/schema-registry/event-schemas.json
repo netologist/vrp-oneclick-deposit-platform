@@ -1,0 +1,16 @@
+{
+  "schemas": [
+    {
+      "subject": "payment.events-value",
+      "schemaType": "PROTOBUF",
+      "compatibility": "BACKWARD",
+      "schema": "syntax = \"proto3\"; package payment.events.v1; message PaymentSettledEvent { string event_type = 1; string id = 2; string payment_id = 3; string merchant_id = 4; string consent_id = 5; string consumer_id = 6; int64 amount_pence = 7; string currency = 8; string status = 9; string bank_payment_ref = 10; string description = 11; int32 risk_score = 12; string risk_decision = 13; string initiated_at = 14; string settled_at = 15; }"
+    },
+    {
+      "subject": "webhook.dlq-value",
+      "schemaType": "PROTOBUF",
+      "compatibility": "BACKWARD",
+      "schema": "syntax = \"proto3\"; package webhook.dlq.v1; message WebhookDLQEvent { string merchant_id = 1; string payment_id = 2; string webhook_url = 3; int32 attempts = 4; string last_error = 5; bytes payload = 6; string failed_at = 7; }"
+    }
+  ]
+}
