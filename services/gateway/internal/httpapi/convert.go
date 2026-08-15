@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"strings"
 	"time"
 
 	commonv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/common/v1"
@@ -80,7 +81,7 @@ func consentStatusString(s consentv1.ConsentStatus) string {
 }
 
 func parseConsentStatus(s string) consentv1.ConsentStatus {
-	switch s {
+	switch strings.ToUpper(strings.TrimSpace(s)) {
 	case "PENDING":
 		return consentv1.ConsentStatus_PENDING
 	case "ACTIVE":

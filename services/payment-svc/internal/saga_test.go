@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"net"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	consentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1"
 	ledgerv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/ledger/v1"
 	riskv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/risk/v1"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/idempotency"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -43,7 +43,7 @@ func newFakeRepo() *fakeRepo {
 
 func (r *fakeRepo) CreatePayment(ctx context.Context, p *Payment) error {
 	if _, exists := r.byKey[p.IdempotencyKey]; exists {
-		return errors.New("duplicate key")
+		return domainerr.New(domainerr.CodeDuplicateIdempotency, "idempotency key already used")
 	}
 	cpy := *p
 	r.payments[p.ID] = &cpy
@@ -54,7 +54,7 @@ func (r *fakeRepo) CreatePayment(ctx context.Context, p *Payment) error {
 func (r *fakeRepo) GetByID(ctx context.Context, id uuid.UUID) (*Payment, error) {
 	p, ok := r.payments[id]
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, domainerr.New(domainerr.CodeNotFound, "not found")
 	}
 	cpy := *p
 	return &cpy, nil
@@ -63,7 +63,7 @@ func (r *fakeRepo) GetByID(ctx context.Context, id uuid.UUID) (*Payment, error) 
 func (r *fakeRepo) GetByIdempotencyKey(ctx context.Context, key string) (*Payment, error) {
 	p, ok := r.byKey[key]
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, domainerr.New(domainerr.CodeNotFound, "not found")
 	}
 	cpy := *p
 	return &cpy, nil
@@ -121,6 +121,18 @@ func (r *fakeRepo) ResetForRetry(ctx context.Context, p *Payment) error {
 	return nil
 }
 
+func (r *fakeRepo) ListStaleInFlightPayments(ctx context.Context, staleAfter time.Duration) ([]*Payment, error) {
+	var stale []*Payment
+	for _, p := range r.payments {
+		if p.Status == StatusInitiated || p.Status == StatusConsentReserved ||
+			p.Status == StatusRiskPassed || p.Status == StatusAuthorising {
+			cpy := *p
+			stale = append(stale, &cpy)
+		}
+	}
+	return stale, nil
+}
+
 // --- Mock gRPC Servers ---
 
 type mockConsentServer struct {
@@ -135,9 +147,9 @@ func (m *mockConsentServer) ValidateAndReserve(ctx context.Context, req *consent
 		return m.validateAndReserve(ctx, req)
 	}
 	return &consentv1.ReserveResponse{
-		ReservationId:   uuid.NewString(),
-		ConsumerId:      "consumer-123",
-		BankConsentRef:  "bank-consent-123",
+		ReservationId:    uuid.NewString(),
+		ConsumerId:       "consumer-123",
+		BankConsentRef:   "bank-consent-123",
 		RemainingMonthly: &commonv1.Money{AmountPence: 100000, Currency: "GBP"},
 	}, nil
 }
@@ -175,6 +187,8 @@ func (m *mockRiskServer) Score(ctx context.Context, req *riskv1.ScoreRequest) (*
 type mockBankServer struct {
 	bankv1.UnimplementedBankAdapterServer
 	initiate func(ctx context.Context, req *bankv1.InitiateRequest) (*bankv1.InitiateResponse, error)
+	reverse  func(ctx context.Context, req *bankv1.ReverseRequest) (*bankv1.ReverseResponse, error)
+	status   func(ctx context.Context, req *bankv1.StatusRequest) (*bankv1.StatusResponse, error)
 }
 
 func (m *mockBankServer) InitiatePayment(ctx context.Context, req *bankv1.InitiateRequest) (*bankv1.InitiateResponse, error) {
@@ -187,9 +201,30 @@ func (m *mockBankServer) InitiatePayment(ctx context.Context, req *bankv1.Initia
 	}, nil
 }
 
+func (m *mockBankServer) ReversePayment(ctx context.Context, req *bankv1.ReverseRequest) (*bankv1.ReverseResponse, error) {
+	if m.reverse != nil {
+		return m.reverse(ctx, req)
+	}
+	return &bankv1.ReverseResponse{
+		BankPaymentRef: req.BankPaymentRef,
+		Status:         bankv1.BankPaymentStatus_SETTLED,
+	}, nil
+}
+
+func (m *mockBankServer) GetPaymentStatus(ctx context.Context, req *bankv1.StatusRequest) (*bankv1.StatusResponse, error) {
+	if m.status != nil {
+		return m.status(ctx, req)
+	}
+	return &bankv1.StatusResponse{
+		BankPaymentRef: req.BankPaymentRef,
+		Status:         bankv1.BankPaymentStatus_SETTLED,
+	}, nil
+}
+
 type mockLedgerServer struct {
 	ledgerv1.UnimplementedLedgerServiceServer
-	post func(ctx context.Context, req *ledgerv1.PostEntryRequest) (*ledgerv1.JournalEntry, error)
+	post    func(ctx context.Context, req *ledgerv1.PostEntryRequest) (*ledgerv1.JournalEntry, error)
+	reverse func(ctx context.Context, req *ledgerv1.ReverseRequest) (*emptypb.Empty, error)
 }
 
 func (m *mockLedgerServer) PostDoubleEntry(ctx context.Context, req *ledgerv1.PostEntryRequest) (*ledgerv1.JournalEntry, error) {
@@ -197,6 +232,13 @@ func (m *mockLedgerServer) PostDoubleEntry(ctx context.Context, req *ledgerv1.Po
 		return m.post(ctx, req)
 	}
 	return &ledgerv1.JournalEntry{Id: uuid.NewString(), PaymentId: req.PaymentId}, nil
+}
+
+func (m *mockLedgerServer) ReverseEntry(ctx context.Context, req *ledgerv1.ReverseRequest) (*emptypb.Empty, error) {
+	if m.reverse != nil {
+		return m.reverse(ctx, req)
+	}
+	return &emptypb.Empty{}, nil
 }
 
 func startMockGRPC(t *testing.T, register func(s *grpc.Server)) (grpcConn *grpc.ClientConn, cleanup func()) {
@@ -219,6 +261,8 @@ func startMockGRPC(t *testing.T, register func(s *grpc.Server)) (grpcConn *grpc.
 // --- Unit Tests ---
 
 func TestPlatformFee(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		amount   int64
 		expected int64
@@ -234,6 +278,8 @@ func TestPlatformFee(t *testing.T) {
 }
 
 func TestSagaOrchestrator_HappyPath(t *testing.T) {
+	t.Parallel()
+
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
 	defer mr.Close()
@@ -283,7 +329,70 @@ func TestSagaOrchestrator_HappyPath(t *testing.T) {
 	assert.Equal(t, "ALLOW", p.RiskDecision)
 }
 
-func TestSagaOrchestrator_RiskDecline(t *testing.T) {
+func TestSagaOrchestrator_IdempotentReplay(t *testing.T) {
+	t.Parallel()
+
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	defer mr.Close()
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	idemStore := idempotency.NewStore(rdb)
+
+	bankCalls := 0
+	bankSrv := &mockBankServer{
+		initiate: func(ctx context.Context, req *bankv1.InitiateRequest) (*bankv1.InitiateResponse, error) {
+			bankCalls++
+			return &bankv1.InitiateResponse{BankPaymentRef: "FPS-REPLAY-1", Status: bankv1.BankPaymentStatus_SETTLED}, nil
+		},
+	}
+
+	cConn, cClean := startMockGRPC(t, func(s *grpc.Server) { consentv1.RegisterConsentServiceServer(s, &mockConsentServer{}) })
+	defer cClean()
+	rConn, rClean := startMockGRPC(t, func(s *grpc.Server) { riskv1.RegisterRiskServiceServer(s, &mockRiskServer{}) })
+	defer rClean()
+	bConn, bClean := startMockGRPC(t, func(s *grpc.Server) { bankv1.RegisterBankAdapterServer(s, bankSrv) })
+	defer bClean()
+	lConn, lClean := startMockGRPC(t, func(s *grpc.Server) { ledgerv1.RegisterLedgerServiceServer(s, &mockLedgerServer{}) })
+	defer lClean()
+
+	repo := newFakeRepo()
+	orch := NewOrchestrator(
+		repo,
+		idemStore,
+		consentv1.NewConsentServiceClient(cConn),
+		riskv1.NewRiskServiceClient(rConn),
+		bankv1.NewBankAdapterClient(bConn),
+		ledgerv1.NewLedgerServiceClient(lConn),
+	)
+
+	mID := uuid.NewString()
+	cID := uuid.NewString()
+	input := InitiateInput{
+		IdempotencyKey: "replay-key-123",
+		MerchantID:     mID,
+		ConsentID:      cID,
+		AmountPence:    2500,
+		Currency:       "GBP",
+	}
+
+	// First call executes saga
+	p1, err := orch.Initiate(context.Background(), input)
+	require.NoError(t, err)
+	assert.Equal(t, StatusSettled, p1.Status)
+	assert.Equal(t, 1, bankCalls)
+
+	// Second call with same key immediately returns existing result without re-executing bank
+	p2, err := orch.Initiate(context.Background(), input)
+	require.NoError(t, err)
+	assert.Equal(t, p1.ID, p2.ID)
+	assert.Equal(t, StatusSettled, p2.Status)
+	assert.Equal(t, 1, bankCalls, "bank should not be called again on replay")
+}
+
+func TestSagaOrchestrator_BankRejected(t *testing.T) {
+	t.Parallel()
+
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
 	defer mr.Close()
@@ -298,25 +407,22 @@ func TestSagaOrchestrator_RiskDecline(t *testing.T) {
 			return &emptypb.Empty{}, nil
 		},
 	}
-	riskSrv := &mockRiskServer{
-		score: func(ctx context.Context, req *riskv1.ScoreRequest) (*riskv1.ScoreResponse, error) {
-			return &riskv1.ScoreResponse{
-				Score:    90,
-				Decision: riskv1.RiskDecision_DECLINE,
-				Reason:   "known fraud pattern",
+	bankSrv := &mockBankServer{
+		initiate: func(ctx context.Context, req *bankv1.InitiateRequest) (*bankv1.InitiateResponse, error) {
+			return &bankv1.InitiateResponse{
+				Status:        bankv1.BankPaymentStatus_REJECTED,
+				FailureReason: "insufficient funds",
 			}, nil
 		},
 	}
-	bankSrv := &mockBankServer{}
-	ledgerSrv := &mockLedgerServer{}
 
 	cConn, cClean := startMockGRPC(t, func(s *grpc.Server) { consentv1.RegisterConsentServiceServer(s, consentSrv) })
 	defer cClean()
-	rConn, rClean := startMockGRPC(t, func(s *grpc.Server) { riskv1.RegisterRiskServiceServer(s, riskSrv) })
+	rConn, rClean := startMockGRPC(t, func(s *grpc.Server) { riskv1.RegisterRiskServiceServer(s, &mockRiskServer{}) })
 	defer rClean()
 	bConn, bClean := startMockGRPC(t, func(s *grpc.Server) { bankv1.RegisterBankAdapterServer(s, bankSrv) })
 	defer bClean()
-	lConn, lClean := startMockGRPC(t, func(s *grpc.Server) { ledgerv1.RegisterLedgerServiceServer(s, ledgerSrv) })
+	lConn, lClean := startMockGRPC(t, func(s *grpc.Server) { ledgerv1.RegisterLedgerServiceServer(s, &mockLedgerServer{}) })
 	defer lClean()
 
 	repo := newFakeRepo()
@@ -330,7 +436,7 @@ func TestSagaOrchestrator_RiskDecline(t *testing.T) {
 	)
 
 	p, err := orch.Initiate(context.Background(), InitiateInput{
-		IdempotencyKey: "test-risk-decline",
+		IdempotencyKey: "test-bank-reject",
 		MerchantID:     uuid.NewString(),
 		ConsentID:      uuid.NewString(),
 		AmountPence:    5000,
@@ -339,10 +445,13 @@ func TestSagaOrchestrator_RiskDecline(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, StatusFailed, p.Status)
-	assert.True(t, consentReleased, "reservation should be released on risk decline")
+	assert.True(t, consentReleased, "consent reservation must be released on bank rejection")
+	assert.Contains(t, p.FailureReason, "BANK_REJECTED")
 }
 
-func TestSagaOrchestrator_ConsentLimitExceeded(t *testing.T) {
+func TestSagaOrchestrator_LedgerFailure_CompensateFull(t *testing.T) {
+	t.Parallel()
+
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
 	defer mr.Close()
@@ -350,18 +459,30 @@ func TestSagaOrchestrator_ConsentLimitExceeded(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	idemStore := idempotency.NewStore(rdb)
 
+	consentReleased := false
+	bankReversed := false
+
 	consentSrv := &mockConsentServer{
-		validateAndReserve: func(ctx context.Context, req *consentv1.ReserveRequest) (*consentv1.ReserveResponse, error) {
-			return nil, status.Error(codes.FailedPrecondition, "CONSENT_LIMIT_EXCEEDED: monthly limit exceeded")
+		releaseReservation: func(ctx context.Context, req *consentv1.ReleaseRequest) (*emptypb.Empty, error) {
+			consentReleased = true
+			return &emptypb.Empty{}, nil
 		},
 	}
-	riskSrv := &mockRiskServer{}
-	bankSrv := &mockBankServer{}
-	ledgerSrv := &mockLedgerServer{}
+	bankSrv := &mockBankServer{
+		reverse: func(ctx context.Context, req *bankv1.ReverseRequest) (*bankv1.ReverseResponse, error) {
+			bankReversed = true
+			return &bankv1.ReverseResponse{BankPaymentRef: req.BankPaymentRef, Status: bankv1.BankPaymentStatus_SETTLED}, nil
+		},
+	}
+	ledgerSrv := &mockLedgerServer{
+		post: func(ctx context.Context, req *ledgerv1.PostEntryRequest) (*ledgerv1.JournalEntry, error) {
+			return nil, status.Error(codes.Unavailable, "ledger db connection pool exhausted")
+		},
+	}
 
 	cConn, cClean := startMockGRPC(t, func(s *grpc.Server) { consentv1.RegisterConsentServiceServer(s, consentSrv) })
 	defer cClean()
-	rConn, rClean := startMockGRPC(t, func(s *grpc.Server) { riskv1.RegisterRiskServiceServer(s, riskSrv) })
+	rConn, rClean := startMockGRPC(t, func(s *grpc.Server) { riskv1.RegisterRiskServiceServer(s, &mockRiskServer{}) })
 	defer rClean()
 	bConn, bClean := startMockGRPC(t, func(s *grpc.Server) { bankv1.RegisterBankAdapterServer(s, bankSrv) })
 	defer bClean()
@@ -379,14 +500,76 @@ func TestSagaOrchestrator_ConsentLimitExceeded(t *testing.T) {
 	)
 
 	p, err := orch.Initiate(context.Background(), InitiateInput{
-		IdempotencyKey: "test-limit-exceeded",
+		IdempotencyKey: "test-ledger-failure",
 		MerchantID:     uuid.NewString(),
 		ConsentID:      uuid.NewString(),
-		AmountPence:    150000,
+		AmountPence:    5000,
 		Currency:       "GBP",
 	})
 
 	assert.Error(t, err)
 	assert.Equal(t, StatusFailed, p.Status)
-	assert.Contains(t, p.FailureReason, "CONSENT_LIMIT_EXCEEDED")
+	assert.True(t, consentReleased, "consent reservation must be released on ledger failure")
+	assert.True(t, bankReversed, "bank payment must be reversed on ledger failure")
+}
+
+func TestSagaOrchestrator_Reconciliation(t *testing.T) {
+	t.Parallel()
+
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	defer mr.Close()
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	idemStore := idempotency.NewStore(rdb)
+
+	consentSrv := &mockConsentServer{}
+	bankSrv := &mockBankServer{
+		status: func(ctx context.Context, req *bankv1.StatusRequest) (*bankv1.StatusResponse, error) {
+			return &bankv1.StatusResponse{BankPaymentRef: req.BankPaymentRef, Status: bankv1.BankPaymentStatus_SETTLED}, nil
+		},
+	}
+	ledgerSrv := &mockLedgerServer{}
+
+	cConn, cClean := startMockGRPC(t, func(s *grpc.Server) { consentv1.RegisterConsentServiceServer(s, consentSrv) })
+	defer cClean()
+	rConn, rClean := startMockGRPC(t, func(s *grpc.Server) { riskv1.RegisterRiskServiceServer(s, &mockRiskServer{}) })
+	defer rClean()
+	bConn, bClean := startMockGRPC(t, func(s *grpc.Server) { bankv1.RegisterBankAdapterServer(s, bankSrv) })
+	defer bClean()
+	lConn, lClean := startMockGRPC(t, func(s *grpc.Server) { ledgerv1.RegisterLedgerServiceServer(s, ledgerSrv) })
+	defer lClean()
+
+	repo := newFakeRepo()
+	orch := NewOrchestrator(
+		repo,
+		idemStore,
+		consentv1.NewConsentServiceClient(cConn),
+		riskv1.NewRiskServiceClient(rConn),
+		bankv1.NewBankAdapterClient(bConn),
+		ledgerv1.NewLedgerServiceClient(lConn),
+	)
+
+	// Simulate an in-flight payment that was interrupted after bank authorization
+	pID := uuid.New()
+	resID := uuid.New()
+	stalePayment := &Payment{
+		ID:             pID,
+		IdempotencyKey: "recon-key-1",
+		MerchantID:     uuid.New(),
+		ConsentID:      uuid.New(),
+		ConsumerID:     "consumer-recon",
+		AmountPence:    5000,
+		Currency:       "GBP",
+		Status:         StatusAuthorising,
+		BankPaymentRef: "FPS-RECON-123",
+		ReservationID:  &resID,
+	}
+	repo.payments[pID] = stalePayment
+	repo.byKey[stalePayment.IdempotencyKey] = stalePayment
+
+	// Resume from ledger
+	err = orch.ResumeFromLedger(context.Background(), stalePayment)
+	require.NoError(t, err)
+	assert.Equal(t, StatusSettled, stalePayment.Status)
 }
