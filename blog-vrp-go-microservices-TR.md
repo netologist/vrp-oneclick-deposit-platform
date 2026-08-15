@@ -18,7 +18,7 @@
 8. [Dağıtık Sistem Kalıpları Derinlemesine](#8-dağıtık-sistem-kalıpları-derinlemesine)
 9. [Finansal Bütünlük: Çift Girişli Muhasebe](#9-finansal-bütünlük-çift-girişli-muhasebe)
 10. [Lokalde Çalıştırma](#10-lokalde-çalıştırma)
-11. [Production'a Hazırlama: Demo'nun Bilinçli Olarak Atladıkları](#11-productiona-hazırlama-demonun-bilinçli-olarak-atladıkları)
+11. [Production Sertleştirme ve Ölçekleme Yol Haritası](#11-production-sertleştirme-ve-ölçekleme-yol-haritası)
 12. [Sonuç](#12-sonuç)
 
 ---
@@ -27,7 +27,7 @@
 
 Yıllar boyunca çevrimiçi ödemeler bir paradoks üzerine kuruluydu: **en ucuz ödeme altyapıları en az güvenilir, en güvenilirleri ise en pahalıydı.**
 
-- **Card-on-file** — Hızlı ve tanıdık ama merchant kart numarasını saklar (PCI-DSS yükü), interchange ücretleri her işlemde %1–3 yer, kartlar süresi dolar, çalınır veya yeniden basılır.
+- **Card-on-file** — Hızlı ve tanıdık ama merchant kart numarasını saklar (PCI-DSS yükü), interchange ücretleri her işlemde %1–3 yer, kartların süresi dolar, çalınır veya yeniden basılır.
 - **Direct Debit** — Ucuz ama yavaş (3–5 gün mutabakat), kaba taneli (değişken değil sabit tutar) ve kurulumu zahmetli. Geri almalar asimetrik: müşteri, ödeme "tamamlandı" dedikten çok sonra bile parayı geri çekebilir.
 - **Standing order** — Sabit kira için iyi, değişken bir alışveriş sepeti için işe yaramaz.
 - **Faster Payments (FPS)** — Neredeyse anlık, ama tarihsel olarak ödeyenin her transferi kendi bankacılık uygulamasında onaylamasını gerektirirdi.
@@ -85,9 +85,8 @@ Open Banking standardı şu **consent kontrol parametrelerini** tanımlar:
 
 İki özellik daha önemlidir:
 
-1. **Anında iptal.** Müşteri yetkiyi her an öldürebilir — PISP'nin uygulamasından *veya* doğrudan bankasının uygulamasından. Sonraki ödeme denemesi basitçe başarısız olur. (Demo bunu modelliyor: `REVOKED` bir consent, saga'nın ödemeyi reddetmesine neden olur.)
-
-2. **Kimlik doğrulama öne alınır.** SCA *bir kez*, consent oluşturulurken, tam banka uygulaması yönlendirmesiyle gerçekleşir. Sonraki her ödeme SCA'yı tamamen atlar çünkü consent, müşteri niyetinin kalıcı kanıtıdır.
+1. **Anında iptal.** Müşteri yetkiyi her an öldürebilir — PISP'nin uygulamasından *veya* doğrudan bankasının uygulamasından. Sonraki ödeme denemesi basitçe başarısız olur.
+2. **Kimlik doğrulama öne alınır.** SCA *bir kez*, consent oluşturulurken gerçekleşir. Sonraki her ödeme SCA'yı tamamen atlar.
 
 ---
 
@@ -97,7 +96,7 @@ Open Banking standardı şu **consent kontrol parametrelerini** tanımlar:
 
 ### Aşama 0 — Düzenleyici Temel (2016–2018)
 
-- **2016:** Competition and Markets Authority (CMA), Retail Banking Market Investigation Order'ı yayımladı; Birleşik Krallık'ın en büyük dokuz bankacılık grubunun ( **CMA9**) müşteri verisi ve ödeme altyapısı üzerinde rekabeti bozan bir boğuculuğa sahip olduğu sonucuna vardı.
+- **2016:** Competition and Markets Authority (CMA), Retail Banking Market Investigation Order'ı yayımladı; Birleşik Krallık'ın en büyük dokuz bankacılık grubunun (**CMA9**) müşteri verisi ve ödeme altyapısı üzerinde rekabeti bozan bir hakimiyeti olduğu sonucuna vardı.
 - **2018:** CMA9'a, **Open Banking Implementation Entity (OBIE)** — sonradan **Open Banking Limited (OBL)** — aracılığıyla *Read/Write API* adlı bir **Open Banking API**'si uygulamaları emredildi.
 
 **CMA9** şunlardır:
@@ -114,24 +113,18 @@ Open Banking standardı şu **consent kontrol parametrelerini** tanımlar:
 
 ### Aşama 1 — Sweeping Zorunluluğu (2021–2024)
 
-VRP, standarda ilk olarak **OBL Read/Write API v3.1.8** ile girdi, ancak CMA başlangıçtaki zorunluluğunu bilinçli olarak **"sweeping"** ile sınırladı — müşterinin *kendi hesapları arasında* para taşıma (ör. vadesiz hesaptan birikim hesabına otomatik aktarma). "Me-to-me" transferler düşük risklidir çünkü ödeyen ve alacaklı aynı kişidir, dolayısıyla dolandırıcılık teşvikleri minimumdur.
+VRP, standarda ilk olarak **OBL Read/Write API v3.1.8** ile girdi, ancak CMA başlangıçtaki zorunluluğunu bilinçli olarak **"sweeping"** ile sınırladı — müşterinin *kendi hesapları arasında* para taşıma (ör. vadesiz hesaptan birikim hesabına otomatik aktarma).
 
-- **Temmuz 2022:** CMA9'un VRP-for-sweeping'i teslim etmesi için orijinal son tarih.
+- **Temmuz 2022:** CMA9'un VRP sweeping'i teslim etmesi için orijinal son tarih.
 - **2022–2024:** OBL gözetiminde her bankanın canlıya geçtiği kademeli bir *Managed Roll Out (MRO)*.
-- **Eylül 2024:** Zorunluluk **tamamen tamamlandı** ilan edildi — son iki tutunucu, Allied Irish Bank ve Bank of Ireland, MRO'dan çıktı. Tüm CMA9 bankaları artık VRP sweeping sunuyor.
-
-Kritik olarak, CMA9, Retail Banking Market Investigation Order 2017'den kaynaklanan *sürekli bir yükümlülük* altında kalmaya devam ediyor: bu sweeping API'lerini canlı ve işlevsel tutmak zorundalar — bu "gönder ve unut" bir zorunluluk değil.
+- **Eylül 2024:** Zorunluluk **tamamen tamamlandı** ilan edildi — son iki banka, Allied Irish Bank ve Bank of Ireland, MRO'dan çıktı. Tüm CMA9 bankaları artık VRP sweeping sunuyor.
 
 ### Aşama 2 — Commercial VRP (2026–günümüz)
 
-Sweeping yalnızca ısınma turuydu. Ekonomik olarak ilginç kullanım alanı **Commercial VRP (cVRP)** — işletmelere yapılan ödemeler (faturalar, abonelikler, e-ticaret ve bu repo'nun gösterdiği "tek tıkla para yatırma"). Sweeping'in aksine, cVRP katılımı bankalar için **gönüllüdür**; bu da yıllarca süren, standart bir ticari model olmayan banka-banka müzakerelere yol açtı.
+Sweeping yalnızca ilk adımdı. Asıl ekonomik devrim **Commercial VRP (cVRP)** — işletmelere yapılan ödemeler (faturalar, abonelikler, e-ticaret ve bu repo'nun gösterdiği "tek tıkla para yatırma"). Sweeping'in aksine, cVRP katılımı bankalar için **gönüllüdür**.
 
-Bu durum 2026'da değişti:
-
-- **Şubat 2026:** **UK Payments Forward Plan**, VRP'yi New Payments Architecture ile birlikte Birleşik Krallık ödeme geleceğinin temel bir direği olarak konumlandırdı.
-- **2 Haziran 2026:** Commercial VRP, **31 firma** (bankalar, fintech'ler, ödeme sağlayıcıları) tarafından kurulan bağımsız, sektöre ait bir kuruluş olan **UK Payments Initiative (UKPI)** altında canlıya geçti; **tek bir rulebook ve ticari model** sağlıyor. Bu, en büyük benimseme engelini kaldırdı: her bankayla özel koşullar müzakere etme zorunluluğu.
-
-**Özet:** İngiltere, VRP'ye iki adımda geçti — *Temmuz 2022'ye kadar zorunlu sweeping VRP (Eylül 2024'te tamamlandı)* ve *Haziran 2026'dan itibaren gönüllü commercial VRP*. Sistem şimdi zorunlu aşamadan, VRP'nin Direct Debit ve card-on-file ile doğrudan rekabet edeceği ticari aşamaya geçiyor.
+- **Şubat 2026:** **UK Payments Forward Plan**, VRP'yi Birleşik Krallık ödeme geleceğinin temel direği ilan etti.
+- **2 Haziran 2026:** Commercial VRP, **31 firma** tarafından kurulan bağımsız kuruluş **UK Payments Initiative (UKPI)** altında canlıya geçti; tek bir kural seti ve ticari model sağladı.
 
 ---
 
@@ -146,29 +139,17 @@ Bu durum 2026'da değişti:
 | **Dolandırıcılık riski** | Düşük (ödeyen = alacaklı) | Yüksek (üçüncü taraf alacaklı) |
 | **Kullanım alanları** | Birikim hesapları, overdraft | Abonelikler, para yatırma, faturalar |
 
-Bu repo **commercial** çeşidi modelliyor: bir merchant, consent edilmiş bir limite karşı tüketicinin parasını çekiyor.
-
 ---
 
 ## 6. Finansal Altyapı İçin Neden Go?
 
-Go, ödeme platformu inşa edebileceğiniz *tek* dil değil — ama bu iş yükü profili için tartışmasız *en uygun* olanı. Finansal işlem sistemleri şunlardır:
+Go, finansal işlem sistemleri için biçilmiş kaftandır:
 
-1. **Concurrency yoğun** — aynı anda binlerce ödeme, her biri küçük bir state machine.
-2. **Gecikmeye duyarlı** — demo, tam 6 servislik bir saga için P99 < 500ms hedefliyor.
-3. **Uzun ömürlü ve düşük bellek churn'ü** — bir ödeme servisi yeniden başlatılmadan aylarca çalışır; GC duraklamaları önemlidir.
-4. **Birçok küçük, bağımsız servisten oluşur** — bu da ucuz, hızlı derleme ve statik binary'leri olan bir dili tercih ettirir.
-
-Go şunları sunar:
-
-- **Goroutine + channel** — bir ödemeyi hafif bir goroutine olarak modelleyin; tek bir servis, önemsiz bellek yüküyle on binlerce eşzamanlı saga'yı yönetir.
-- **Statik tip + compile-time güvenlik** — derleyici, para hareket etmeden önce tüm protobuf/gRPC sözleşme uyumsuzluklarını build zamanında yakalar.
-- **`context.Context`** — her gRPC çağrısı, DB sorgusu ve Kafka publish'inden geçen deadline, cancellation ve tracing yayılımı için birinci sınıf bir deyim. Bu, dile gömülü dağıtık izlemedir.
-- **Zor kısımlar için zengin stdlib** — `net/http`, `crypto/hmac`, `crypto/subtle`, `encoding/json` ve (Go 1.21'den beri) yapılandırılmış loglama için `log/slog`.
-- **Statik binary + küçük container** — demo, `gcr.io/distroless/static-debian12:nonroot` içinde dağıtılır: *shell'siz*, *paket yöneticisiz* ve önemli ölçüde azaltılmış saldırı yüzeyi.
-- **"Exactly-once"ı *düşünülebilir* kılan bir concurrency modeli** — bellek garantisi olmayan bir dilde doğru bir dağıtık kilit elle yazamazsınız. Go'nun `sync` + `atomic` ilkelleri ve `-race` disiplini, invariantları açık hale getirir.
-
-Repo, Go deyimlerine baştan sona yaslanır: graceful shutdown için `signal.NotifyContext`, tipli hata hiyerarşisi için `errors.Is`/`errors.As`, table-driven testler ve test edilebilirlik için küçük interface'ler (`paymentRepo`, `querier`).
+- **Goroutine + channel** — hafiftir; tek bir servis on binlerce eşzamanlı saga'yı düşük bellek yüküyle yönetir.
+- **Statik tip güvenliği** — derleyici tüm protobuf/gRPC uyuşmazlıklarını derleme zamanında yakalar.
+- **`context.Context`** — deadline, cancellation ve W3C traceparent yayılımı için dile gömülü dağıtık izleme.
+- **Zor kısımlar için stdlib** — `net/http`, `crypto/hmac`, `crypto/subtle`, `encoding/json`, `log/slog`.
+- **Statik binary + distroless container** — `gcr.io/distroless/static-debian12:nonroot` ile shellsiz, güvenli container imajları.
 
 ---
 
@@ -185,7 +166,7 @@ C4Container
 
     System_Boundary(vrp, "VRP Platformu") {
         Container(gateway, "API Gateway", "Go / chi", "JWT auth, rate limiting, HTTP→gRPC proxy")
-        Container(payment_svc, "Payment Service", "Go / gRPC", "Saga orchestrator + Outbox relay")
+        Container(payment_svc, "Payment Service", "Go / gRPC", "Saga orchestrator + Outbox relay + Reconciler")
         Container(consent_svc, "Consent Service", "Go / gRPC", "Consent yaşam döngüsü, rezervasyonlar")
         Container(merchant_svc, "Merchant Service", "Go / gRPC", "Merchant + API key + webhook config")
         Container(risk_svc, "Risk Service", "Go / gRPC", "Kural motoru, velocity, blocklist")
@@ -216,8 +197,6 @@ C4Container
 ```
 
 ### Altı Adımlı Ödeme Saga'sı
-
-Sistemin çekirdeği, `payment-svc` içindeki bir **saga orchestrator**'dır. Tüketici "£50 Yatır"a tıkladığında, her adım korumalı ve *telafi edilebilir* şekilde şunlar gerçekleşir:
 
 ```
 Consent → Risk → Banka → Ledger → Settle+Outbox → Confirm
@@ -264,7 +243,7 @@ sequenceDiagram
     PS->>GW: Payment{status=SETTLED}
 
     Note over PS,KF: Asenkron
-    PS->>KF: Publish payment.settled
+    PS->>KF: Publish payment.settled (RequireAll)
     KF->>NS: Tüket
     NS->>MR: POST webhook (HMAC)
 
@@ -274,95 +253,101 @@ sequenceDiagram
     PS--xLS: Muhasebeyi tersine çevir
 ```
 
-### Neden Saga?
-
-Bir ödeme **dört farklı sisteme** dokunur (consent DB, banka API'si, ledger DB, event bus) — bu bir **dağıtık transaction**'dır. Bir PostgreSQL tablosu, bir bankanın HTTP API'si ve bir Kafka topic'i arasında tek bir atomik commit yoktur. Bir **saga**, transaction'ı her biri **telafi edici bir aksiyona** sahip yerel adımlara böler:
-
-| Adım | Başarı | Telafi (sonraki hata durumunda) |
-|---|---|---|
-| Consent rezerve | rezervasyon tutuldu | Rezervasyonu serbest bırak |
-| Banka başlat | para hareket ediyor | Banka ödemesini geri al |
-| Ledger kaydet | çift giriş yazıldı | Muhasebe kaydını tersine çevir |
-| Settle + outbox | status = SETTLED | (terminal — telafi gerekmez) |
-
-Repo'nun `compensate()` fonksiyonu, tüm telafi hatalarını doğru şekilde *toplar* (short-circuit yapmaz), böylece her rollback denenir; telafinin kendisi başarısız olduğunda ise terminal bir `MANUAL_REVIEW` durumuna yükseltir — para hareketi için doğru davranış.
-
 ---
 
 ## 8. Dağıtık Sistem Kalıpları Derinlemesine
 
-Repo'nun "production-grade" etiketini hak ettiği yer burasıdır. Bir *demo*'yu *gerçek* bir ödeme sisteminden ayıran az sayıdaki kalıbı doğru şekilde uygular.
+### 8.1 Transactional Outbox (`FOR UPDATE SKIP LOCKED`)
 
-### 8.1 Transactional Outbox (Dual-Write Problemini Çözme)
-
-**Problem:** "Ödemeyi Postgres'te settled yap" ve "Kafka event yayınla" iki farklı sistemdir. DB satırını *sonra* event'i yazarsanız, ikisi arasında bir çökme, **event'siz settled bir ödeme** bırakır (merchant webhook'unu asla almaz). Önce yayınlayıp *sonra* yazarsanız, çökme var olmayan bir ödeme için event bırakır.
-
-**Çözüm:** event'i, durum değişikliğiyle **aynı veritabanı transaction'ına** yazın, sonra arka plandaki bir relay onu yayınlasın.
+Durum değişikliği ile Kafka event kaydı tek bir veritabanı transaction'ında atomik yazılır. Outbox relay, çoklu replikalarda mükerrerliği önlemek için `FOR UPDATE SKIP LOCKED` ile satırları kilitler:
 
 ```go
-// payment-svc/internal/repo.go — SettleWithOutbox
-func (r *Repo) SettleWithOutbox(ctx context.Context, p *Payment) error {
-    return pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
-        // 1. UPDATE payment SET status = 'SETTLED'
-        // 2. INSERT payment_event (audit log)
-        // 3. INSERT outbox (topic, key, payload)   ← aynı transaction
-        // Üçü birlikte atomik commit olur ya da hiçbiri olmaz.
-        return nil
-    })
-}
-```
-
-Bir relay goroutine'i `outbox` tablosunu 200ms'de bir poll eder, her satırı Kafka'ya yayınlar ve senkron ack sonrası siler — **at-least-once** teslim semantiği.
-
-### 8.2 Idempotency (Para İçin Exactly-Once)
-
-"Exactly-once" bir ağ üzerinde mevcut değildir. Var olan şey **at-least-once teslim + idempotent işleme**dir. Repo, idempotency'yi *üç* katmanda uygular:
-
-1. **Redis `SET NX`** — bir idempotency anahtarını ilk talep eden "kazanır"; eşzamanlı duplikatlar mevcut sonucu alır.
-2. **Veritabanı unique constraint** — `payment_id` benzersizdir; duplikat insert yakalanır ve `CodeDuplicateIdempotency`'ye eşlenir, orijinali yeniden okur ve döndürür.
-3. **Consumer dedup** — notification servisi, `payment_id` başına 24 saatlik bir Redis anahtarı tutar; böylece yeniden teslim edilen bir Kafka mesajı webhook'u iki kez tetiklemez.
-
-```go
-// pkg/shared/idempotency/redis.go — atomik claim
-func (s *Store) Begin(ctx context.Context, idemKey string) (bool, error) {
-    ok, err := s.rdb.SetNX(ctx, key(idemKey), "PROCESSING", s.ttl).Result()
+// payment-svc/internal/repo.go — ListOutbox
+func (r *Repo) ListOutbox(ctx context.Context, limit int) ([]OutboxRow, error) {
+    const q = `
+SELECT id, topic, key, payload, created_at
+FROM outbox
+ORDER BY created_at ASC
+LIMIT $1
+FOR UPDATE SKIP LOCKED`
     // ...
 }
 ```
 
-### 8.3 Circuit Breaker + Retry
+### 8.2 In-Flight Crash Recovery (Reconciliation Worker)
 
-Banka, kontrol edemediğiniz bir dış bağımlılıktır. Başarısız olduğunda yapılacak en kötü şey, onu dövmek ve hatayı kademelendirmektir. `bank-adapter`, her dış çağrıyı bir **circuit breaker** (gobreaker) *ve* **sınırlı exponential retry** (retry-go) ile sarar:
+Pod ödemenin ortasında çöktüğünde (ör. bankadan para çekilmiş ama ledger yazılmadan önce), bellekteki saga durumu uçar. `ReconciliationWorker` askıda kalan ödemeleri tarar, banka durumunu sorgular ve işlemi otomatik tamamlar veya telafi eder:
 
 ```go
-// bank-adapter/internal/adapter.go
-// gobreaker: 10 ardışık başarısızlık → devre açık
-//            10s half-open probe, maks 5 half-open istek
-// retry-go:  3 deneme, 100ms exponential backoff, RetryIf=isTransient
+// payment-svc/internal/reconciliation.go
+func (w *ReconciliationWorker) reconcileStalePayments(ctx context.Context) {
+    stale, _ := w.repo.ListStaleInFlightPayments(ctx, w.staleAfter)
+    for _, p := range stale {
+        if p.BankPaymentRef != "" {
+            resp, _ := w.bank.GetPaymentStatus(ctx, &bankv1.StatusRequest{BankPaymentRef: p.BankPaymentRef})
+            if resp.GetStatus() == bankv1.BankPaymentStatus_SETTLED {
+                _ = w.orchestrator.ResumeFromLedger(ctx, p) // 4. adımdan devam et
+                continue
+            }
+        }
+        _ = w.orchestrator.CompensateStale(ctx, p, "RECONCILIATION_TIMEOUT")
+    }
+}
 ```
 
-`transientError`, *yeniden denenebilir* bir hatayı (HTTP 5xx — banka kapalı) *yeniden denenemez* olandan (4xx business reddi — yeniden denemek fayda etmez) ayırır. Bu ayrım, retry'lerin gerçek bir reddi bir thundering herd'e dönüştürmesini engeller.
+### 8.3 Zero-Alloc Webhook HMAC & Replay Koruması
 
-### 8.4 Pessimistic vs Optimistic Concurrency
+Webhook imzalamada bellek allokasyonunu sıfırlamak için stack buffer kullanılır; replay saldırılarına karşı 5 dakikalık tazelik kontrolü uygulanır:
 
-- **Pessimistic** (`SELECT ... FOR UPDATE`): consent servisi, kayan 30 günlük limitleri kontrol edip yeni ödemeyi rezerve ederken consent satırını kilitler — *iki eşzamanlı ödeme limit kontrolünü aynı anda geçemez*.
-- **Optimistic** (`ON CONFLICT DO NOTHING`, `WHERE status = $old` ile CAS): ledger ve retry mantığı, bayat bir yazımın temiz şekilde başarısız olması için compare-and-swap kullanır.
+```go
+// pkg/shared/webhook/hmac.go
+func VerifyWithTolerance(secret, signature string, timestamp time.Time, body []byte, maxAge time.Duration) bool {
+    if maxAge > 0 {
+        age := time.Since(timestamp)
+        if age < 0 { age = -age }
+        if age > maxAge {
+            return false // Replay saldırısı engellendi
+        }
+    }
+    expected := Sign(secret, timestamp, body)
+    return hmac.Equal([]byte(expected), []byte(signature))
+}
+```
 
-### 8.5 Idempotent Consumer + Dead Letter Queue
+### 8.4 Atomik Redis Rate Limiting (Lua Script)
 
-Notification servisi, `payment.events`'i **at-least-once** semantiği ve manuel offset commit ile tüketir. Bir poison mesajı (geçersiz JSON), sonsuza dek yeniden denemek yerine *atlanır ve loglanır*. Başarısız teslimatlar, replay için ham baytları `json.RawMessage` olarak koruyan bir **DLQ topic**'ine (`webhook.dlq`) gider.
+Gateway katmanında yarış durumlarını (race condition) engellemek için tek bir Redis turunda çalışan atomik Lua scripti kullanılır:
 
-### 8.6 Rate Limiting
+```lua
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, 2)
+end
+return current
+```
 
-Gateway, Redis'te merchant başına fixed-window bir rate limit uygular. Redis kapalıyken *fail-open* davranır — doğru resilience duruşu: bozulmuş performans, tam bir kesintiden iyidir.
+### 8.5 `google.rpc.ErrorInfo` ile Yapılandırılmış Hata Yönetimi
+
+Kırılgan string parsing (`strings.Contains`) yerine gRPC sınırlarında domain kodları `ErrorInfo` detayında taşınır:
+
+```go
+// pkg/shared/domainerr/errors.go
+st := status.New(codes.FailedPrecondition, de.Message)
+stWithDetails, _ := st.WithDetails(&errdetails.ErrorInfo{
+    Reason: string(de.Code),
+    Domain: DomainPlatform,
+})
+```
 
 ---
 
 ## 9. Finansal Bütünlük: Çift Girişli Muhasebe
 
-Bu, repo'nun en sofistike kısmıdır ve çoğu demo'nun yanlış yaptığı kısımdır. Bir ödeme ledger'ı **kanıtlanabilir şekilde dengeli** olmalıdır — her borcun eşleşen bir alacağı vardır ve tüm journal satırlarının toplamı her zaman sıfırdır.
+Bir ödeme ledger'ı **kanıtlanabilir şekilde dengeli** olmalıdır ($\sum \text{Borç} = \sum \text{Alacak}$).
 
-`ledger-svc` bunu uygulama katmanında değil, *veritabanı* katmanında uygular:
+`ledger-svc` bunu veritabanı seviyesinde `CONSTRAINT TRIGGER` ile doğrular:
 
 ```sql
 -- migrations/ledger/000001_init.up.sql
@@ -373,31 +358,19 @@ FOR EACH ROW
 EXECUTE FUNCTION check_journal_balance();
 ```
 
-Bu trigger, ledger'ı dengesiz bırakan her transaction'ı reddeder — **invariant, hatalı bir uygulama tarafından bile ihlal edilemez.** Uygulama katmanı şunları ekler:
-
-- **SERIALIZABLE isolation** + serialization failure'da retry (`40001`/`40P01`) — bakiyeyi bozacak iki eşzamanlı kayıt, sessizce commit edilmek yerine yeniden çalıştırılır.
-- **Idempotent posting** — aynı `payment_id`'yi iki kez kaydetmek mevcut kaydı döndürür.
-- **Reversals** — bir reversal kaydı borç↔alacağı çevirir ve orijinali reversed işaretler; hepsi tek bir serializable transaction'da.
-
-```go
-// ledger-svc/internal/store.go
-func withSerializable(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
-    for range maxAttempts { // Go 1.22 range-over-int
-        err := pgx.BeginTxFunc(ctx, pool,
-            pgx.TxOptions{IsoLevel: pgx.Serializable}, fn)
-        if err == nil { return nil }
-        if !isSerializationFailure(err) { return err } // sadece 40001/40P01 retry
-    }
-    return err
-}
-```
-
-**`Money` value object'i** (`pkg/shared/money`) sessiz kahramandır: tutarları **tamsayı küçük birimler (`int64` pence)** olarak saklar ve *asla* float kullanmaz. Paranın yakınında hiçbir `float64` aritmetiği yoktur — ledger'ları bozan klasik yuvarlama hatası kaynağı.
+**`Money` value object'i** (`pkg/shared/money`) kuruş bazında tamsayı (`int64`) tutar ve para birimi uyuşmazlığı kontrolü yapar:
 
 ```go
 type Money struct {
-    amountPence int64  // asla float64
-    currency    string // ISO 4217
+    AmountPence int64
+    Currency    string // ISO 4217 büyük harf doğrulamalı
+}
+
+func (m Money) Add(other Money) (Money, error) {
+    if !m.SameCurrency(other) {
+        return Money{}, fmt.Errorf("cannot add %s to %s: currency mismatch", other.Currency, m.Currency)
+    }
+    return Money{AmountPence: m.AmountPence + other.AmountPence, Currency: m.Currency}, nil
 }
 ```
 
@@ -409,61 +382,47 @@ type Money struct {
 # 1) Altyapı — Postgres, Redis, Redpanda (Kafka), Jaeger, Prometheus, Grafana
 make up
 
-# 2) Proto'ları üret (sadece .proto değiştiğinde)
-make proto
-
-# 3) 8 servisi ./bin'e derle
+# 2) 8 mikroservisi ./bin'e derle
 make build
 
-# 4) Tüm süreçleri çalıştır
+# 3) Tüm servisleri arka planda başlat
 ./scripts/run-all.sh
 
-# 5) Uçtan uca smoke test: register → JWT → consent → payment SETTLED → webhook
+# 4) Uçtan uca smoke testi çalıştır
 ./scripts/e2e-smoke.sh
 ```
 
-Smoke test tüm yolculuğu çalıştırır: merchant kaydet, JWT üret, consent oluştur, tam altı adımlık saga'yı `SETTLED`'a koşturan bir ödeme başlat ve merchant webhook'unun tetiklendiğini doğrula.
-
-| Servis | Port |
-|---|---|
-| Gateway (HTTP) | 8080 |
-| Merchant gRPC | 50051 |
-| Consent gRPC | 50052 |
-| Payment gRPC | 50053 |
-| Risk gRPC | 50054 |
-| Ledger gRPC | 50055 |
-| Bank Adapter gRPC | 50056 |
-| Mock Bank HTTP | 18080 |
+| Servis | Port | Açıklama |
+|---|---|---|
+| Gateway (HTTP) | 8080 | REST API & Swagger UI (`/docs`) |
+| Merchant gRPC | 50051 | Kayıt & API anahtarları |
+| Consent gRPC | 50052 | Rıza limitleri & rezervasyonlar |
+| Payment gRPC | 50053 | Saga orchestrator |
+| Risk gRPC | 50054 | Gerçek zamanlı fraud kontrolü |
+| Ledger gRPC | 50055 | Çift girişli muhasebe |
+| Bank Adapter gRPC | 50056 | Open Banking adapter & mock |
 
 ---
 
-## 11. Production'a Hazırlama: Demo'nun Bilinçli Olarak Atladıkları
+## 11. Production Sertleştirme ve Ölçekleme Yol Haritası
 
-Repo açıkça *"interview-grade"* bir demodur. Kapsamlı bir inceleme, gerçek para akmadan önce kapatmanız gereken boşlukları ortaya çıkarır. Bunları dürüstçe söylemek, mühendislik disiplininin bir parçasıdır:
+Platform 4 haftalık üretim sertleştirme programını tamamlamıştır. Kalan hedefler Tier-1 kurumsal ölçeklemeye odaklanmaktadır:
 
-| Kategori | Boşluk | Production Fix |
+| Alan | Mevcut Durum (Sertleştirilmiş) | Day-2 Ölçekleme Hedefi |
 |---|---|---|
-| **Build** | `go 1.26.2` versiyon direktifi hayali | Gerçek bir toolchain'e sabitle (1.23.x) |
-| **Secrets** | `k8s/secrets.yaml` plaintext JWT/HMAC | External Secrets Operator + Vault veya SealedSecrets |
-| **Webhook** | `webhook.Verify` timestamp freshness kontrolü yok | ~5 dk'dan eski imzaları reddet (Stripe tarzı) |
-| **Transport** | Tüm DB URL'lerinde `sslmode=disable` | Production'da CA ile `verify-full` |
-| **Outbox** | `ListOutbox` `FOR UPDATE SKIP LOCKED` içermiyor | Multi-replica'da duplike event'leri önle |
-| **Kafka** | `RequiredAcks: RequireOne` | Finansal event'ler için replication ≥ 2 ile `RequireAll` |
-| **K8s** | `securityContext` yok, gRPC `livenessProbe` yok | `runAsNonRoot`, `readOnlyRootFilesystem`, `drop: [ALL]` |
-| **Testler** | Handler/repo katmanları ~%0 kapsam | bufconn gRPC testleri + ledger için testcontainers |
-| **Hata modeli** | Downstream hatalar `strings.Contains` ile sınıflanıyor | `google.rpc.ErrorInfo` status details |
-
-Bunlar gizli kusurlar değil — tam olarak "demo'yu production'dan ayıran şey" listesidir ve bunları belgelemek, egzersizin amacıdır.
+| **Outbox Relay** | `FOR UPDATE SKIP LOCKED` + `RequireAll` | **Debezium CDC** (Postgres WAL streaming) |
+| **Saga Dayanıklılığı** | `ReconciliationWorker` (Crash recovery) | **Temporal / Cadence** iş akışı motoru |
+| **Güvenlik** | Distroless nonroot `securityContext`, Replay koruması | **Istio / Linkerd mTLS Service Mesh** |
+| **Veritabanı HA** | Çoklu veritabanı şema izolasyonu | **CloudNativePG HA StatefulSets** + read-replica |
+| **Gözlemlenebilirlik** | Context `TraceHandler`, W3C traceparent | **OpenTelemetry Collector & RED Prometheus metrikleri** |
 
 ---
 
 ## 12. Sonuç
 
-Variable Recurring Payments, Faster Payments'tan bu yana Birleşik Krallık ödeme altyapısındaki en önemli değişikliği temsil ediyor: **bir kez kimlik doğrula, birçok kez öde, sert ve banka tarafından uygulanan limitlerle.** İngiltere dünyaya öncülük etti — *Temmuz 2022'ye kadar sweeping VRP'yi zorunlu kıldı (Eylül 2024'te tamamlandı)* ve *2 Haziran 2026'da UK Payments Initiative altında commercial VRP'yi başlattı*.
+Variable Recurring Payments, Faster Payments'tan bu yana Birleşik Krallık ödeme altyapısındaki en önemli yeniliktir: **bir kez kimlik doğrula, birçok kez öde, sert ve banka tarafından uygulanan limitlerle.**
 
-VRP altyapısı inşa etmek bir dağıtık sistemler masterclass'ıdır: sagalar, transactional outbox'lar, idempotency, circuit breaker'lar ve kanıtlanabilir çift girişli muhasebe — bunların hepsini Go, goroutine'ler, `context.Context`, `log/slog` ve statik binary'ler sayesinde özel bir zarafetle yönetir.
-
-[vrp-oneclick-deposit-platform](https://github.com/netologist/vrp-oneclick-deposit-platform) repo'su, zor %20'yi doğru yapan nadir, çalıştırılabilir bir referanstır: saga telafi matrisi, outbox atomikliği, SERIALIZABLE ledger ve katmanlı idempotency. Go veya dağıtık sistemler öğreniyorsanız, okunması, eleştirilmesi ve — bir sonraki adım olarak — sağlamlaştırılması gereken mükemmel bir kod tabanıdır.
+[vrp-oneclick-deposit-platform](https://github.com/netologist/vrp-oneclick-deposit-platform) repo'su, sagalar, transactional outbox'lar, kaza mutabakatı (crash reconciliation) ve çift girişli muhasebe defterlerini Go dilinin zarafetiyle bir araya getiren üretime hazır bir referans mimarisidir.
 
 ---
 

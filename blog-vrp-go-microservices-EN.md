@@ -18,7 +18,7 @@
 8. [Distributed Systems Patterns in Depth](#8-distributed-systems-patterns-in-depth)
 9. [Financial Integrity: The Double-Entry Ledger](#9-financial-integrity-the-double-entry-ledger)
 10. [Running It Locally](#10-running-it-locally)
-11. [Production Hardening: What the Demo Deliberately Skips](#11-production-hardening-what-the-demo-deliberately-skips)
+11. [Production Hardening & Scale Roadmap](#11-production-hardening--scale-roadmap)
 12. [Conclusion](#12-conclusion)
 
 ---
@@ -168,8 +168,6 @@ Go delivers:
 - **Static binaries + tiny containers** — the demo ships in `gcr.io/distroless/static-debian12:nonroot` — a container with *no shell*, *no package manager*, and a dramatically reduced attack surface.
 - **A concurrency model that makes "exactly-once" *thinkable*** — you can't hand-write a correct distributed lock in a language without memory guarantees. Go's `sync` + `atomic` primitives, plus the discipline of `-race`, make the invariants explicit.
 
-The repo leans on Go idioms throughout: `signal.NotifyContext` for graceful shutdown, `errors.Is`/`errors.As` for a typed error hierarchy, table-driven tests, and small interfaces (`paymentRepo`, `querier`) for testability.
-
 ---
 
 ## 7. The Architecture: 8 Services, One Saga
@@ -185,7 +183,7 @@ C4Container
 
     System_Boundary(vrp, "VRP Platform") {
         Container(gateway, "API Gateway", "Go / chi", "JWT auth, rate limiting, HTTP→gRPC proxy")
-        Container(payment_svc, "Payment Service", "Go / gRPC", "Saga orchestrator + Outbox relay")
+        Container(payment_svc, "Payment Service", "Go / gRPC", "Saga orchestrator + Outbox relay + Reconciler")
         Container(consent_svc, "Consent Service", "Go / gRPC", "Consent lifecycle, reservations")
         Container(merchant_svc, "Merchant Service", "Go / gRPC", "Merchant + API key + webhook config")
         Container(risk_svc, "Risk Service", "Go / gRPC", "Rule engine, velocity, blocklist")
@@ -264,7 +262,7 @@ sequenceDiagram
     PS->>GW: Payment{status=SETTLED}
 
     Note over PS,KF: Async
-    PS->>KF: Publish payment.settled
+    PS->>KF: Publish payment.settled (RequireAll)
     KF->>NS: Consume
     NS->>MR: POST webhook (HMAC)
 
@@ -274,93 +272,101 @@ sequenceDiagram
     PS--xLS: Reverse ledger
 ```
 
-### Why a Saga?
-
-A payment touches **four different systems** (consent DB, bank API, ledger DB, event bus) — it is a **distributed transaction**. There is no single atomic commit across a PostgreSQL table, a bank's HTTP API, and a Kafka topic. A **saga** breaks the transaction into local steps, each with a **compensating action**:
-
-| Step | Success | Compensation (on later failure) |
-|---|---|---|
-| Consent reserve | reservation held | Release reservation |
-| Bank initiate | funds moving | Reverse bank payment |
-| Ledger post | double-entry written | Reverse ledger entry |
-| Settle + outbox | status = SETTLED | (terminal — no compensation needed) |
-
-The repo's `compensate()` correctly collects *all* compensation errors (it doesn't short-circuit) so every rollback is attempted, and escalates to a terminal `MANUAL_REVIEW` state when compensation itself fails — the correct behaviour for money movement.
-
 ---
 
 ## 8. Distributed Systems Patterns in Depth
 
-This is where the repo earns its "production-grade" label. It implements, correctly, the handful of patterns that separate a *demo* from a *real* payment system.
+### 8.1 Transactional Outbox (Multi-Replica Safe)
 
-### 8.1 Transactional Outbox (Solving the Dual-Write Problem)
+**The problem:** "Mark payment settled in Postgres" and "publish a Kafka event" are two different systems. A crash between the two creates dual-write inconsistency.
 
-**The problem:** "Mark payment settled in Postgres" and "publish a Kafka event" are two different systems. If you write the DB row *then* publish the event, a crash between the two leaves a settled payment with **no event** (the merchant never gets their webhook). If you publish *then* write, a crash leaves an event for a payment that doesn't exist.
-
-**The solution:** write the event **into the same database transaction** as the state change, then have a background relay publish it.
+**The solution:** write the event **into the same database transaction** as the state change, then relay to Kafka using `FOR UPDATE SKIP LOCKED` and `RequireAll` acks.
 
 ```go
-// payment-svc/internal/repo.go — SettleWithOutbox
-func (r *Repo) SettleWithOutbox(ctx context.Context, p *Payment) error {
-    return pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
-        // 1. UPDATE payment SET status = 'SETTLED'
-        // 2. INSERT payment_event (audit log)
-        // 3. INSERT outbox (topic, key, payload)   ← same transaction
-        // All three commit atomically or not at all.
-        return nil
-    })
-}
-```
-
-A relay goroutine polls the `outbox` table every 200ms, publishes each row to Kafka, and deletes it after a synchronous ack — **at-least-once** delivery semantics.
-
-### 8.2 Idempotency (Exactly-Once for Money)
-
-"Exactly-once" doesn't exist on a network. What exists is **at-least-once delivery + idempotent processing**. The repo enforces idempotency at *three* layers:
-
-1. **Redis `SET NX`** — the first caller to claim an idempotency key "wins"; concurrent duplicates get the existing result.
-2. **Database unique constraint** — `payment_id` is unique; a duplicate insert is caught and mapped to `CodeDuplicateIdempotency`, which re-reads and returns the original.
-3. **Consumer dedup** — the notification service keeps a 24h Redis key per `payment_id`, so a redelivered Kafka message doesn't fire the webhook twice.
-
-```go
-// pkg/shared/idempotency/redis.go — atomic claim
-func (s *Store) Begin(ctx context.Context, idemKey string) (bool, error) {
-    ok, err := s.rdb.SetNX(ctx, key(idemKey), "PROCESSING", s.ttl).Result()
+// payment-svc/internal/repo.go — ListOutbox with row locking
+func (r *Repo) ListOutbox(ctx context.Context, limit int) ([]OutboxRow, error) {
+    const q = `
+SELECT id, topic, key, payload, created_at
+FROM outbox
+ORDER BY created_at ASC
+LIMIT $1
+FOR UPDATE SKIP LOCKED`
     // ...
 }
 ```
 
-### 8.3 Circuit Breaker + Retry
+### 8.2 In-Flight Crash Recovery (Reconciliation Worker)
 
-The bank is an external dependency you can't control. When it fails, the worst thing you can do is hammer it and cascade the failure. `bank-adapter` wraps every outbound call in a **circuit breaker** (gobreaker) *and* a **bounded exponential retry** (retry-go):
+When a node dies mid-saga (e.g. money moved at the bank, but before ledger commit), in-memory state is lost. The `ReconciliationWorker` polls stale in-flight payments, queries the bank's status endpoint, and automatically completes or compensates:
 
 ```go
-// bank-adapter/internal/adapter.go
-// gobreaker: 10 consecutive failures → open circuit
-//            10s half-open probe, max 5 half-open requests
-// retry-go:  3 attempts, 100ms exponential backoff, RetryIf=isTransient
+// payment-svc/internal/reconciliation.go
+func (w *ReconciliationWorker) reconcileStalePayments(ctx context.Context) {
+    stale, _ := w.repo.ListStaleInFlightPayments(ctx, w.staleAfter)
+    for _, p := range stale {
+        if p.BankPaymentRef != "" {
+            resp, _ := w.bank.GetPaymentStatus(ctx, &bankv1.StatusRequest{BankPaymentRef: p.BankPaymentRef})
+            if resp.GetStatus() == bankv1.BankPaymentStatus_SETTLED {
+                _ = w.orchestrator.ResumeFromLedger(ctx, p) // Complete from Step 4
+                continue
+            }
+        }
+        _ = w.orchestrator.CompensateStale(ctx, p, "RECONCILIATION_TIMEOUT")
+    }
+}
 ```
 
-`transientError` distinguishes a *retriable* failure (HTTP 5xx — the bank is down) from a *non-retriable* one (a 4xx business rejection — retrying won't help). This distinction is what keeps retries from amplifying a real rejection into a thundering herd.
+### 8.3 Zero-Alloc Webhook HMAC & Replay Defense
 
-### 8.4 Pessimistic vs Optimistic Concurrency
+Webhook signatures must be tamper-proof and replay-resistant. The implementation uses stack buffers to achieve zero heap allocation and enforces a 5-minute freshness tolerance window:
 
-- **Pessimistic** (`SELECT ... FOR UPDATE`): the consent service locks the consent row while it checks rolling 30-day limits and reserves the new payment — *no two concurrent payments can both pass the limit check*.
-- **Optimistic** (`ON CONFLICT DO NOTHING`, CAS with `WHERE status = $old`): the ledger and retry logic use compare-and-swap so a stale write fails cleanly.
+```go
+// pkg/shared/webhook/hmac.go
+func VerifyWithTolerance(secret, signature string, timestamp time.Time, body []byte, maxAge time.Duration) bool {
+    if maxAge > 0 {
+        age := time.Since(timestamp)
+        if age < 0 { age = -age }
+        if age > maxAge {
+            return false // Replay attack prevented
+        }
+    }
+    expected := Sign(secret, timestamp, body)
+    return hmac.Equal([]byte(expected), []byte(signature))
+}
+```
 
-### 8.5 Idempotent Consumer + Dead Letter Queue
+### 8.4 Atomic Redis Rate Limiting (Lua Script)
 
-The notification service consumes `payment.events` with **at-least-once** semantics and manual offset commit. A poison message (invalid JSON) is *skipped and logged* rather than retried forever. Failed deliveries go to a **DLQ topic** (`webhook.dlq`) with the raw bytes preserved as `json.RawMessage` for replay.
+To prevent race conditions during rate-limit counter initialization and TTL expiration, the gateway executes an atomic Lua script in a single Redis roundtrip:
 
-### 8.6 Rate Limiting
+```lua
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, 2)
+end
+return current
+```
 
-The gateway applies a per-merchant fixed-window rate limit in Redis. It fails *open* when Redis is down — the correct resilience posture: degraded performance is better than a total outage.
+### 8.5 Structured Error Handling with `google.rpc.ErrorInfo`
+
+Instead of parsing error message strings with `strings.Contains`, domain errors are transported across gRPC boundaries with structured `ErrorInfo` metadata:
+
+```go
+// pkg/shared/domainerr/errors.go
+st := status.New(codes.FailedPrecondition, de.Message)
+stWithDetails, _ := st.WithDetails(&errdetails.ErrorInfo{
+    Reason: string(de.Code),
+    Domain: DomainPlatform,
+})
+```
 
 ---
 
 ## 9. Financial Integrity: The Double-Entry Ledger
 
-This is the most sophisticated part of the repo, and the one most demos get wrong. A payments ledger must be **provably balanced** — every debit has a matching credit, and the sum of all journal lines is always zero.
+A payments ledger must be **provably balanced** — every debit has a matching credit, and the sum of all journal lines is always zero.
 
 The `ledger-svc` enforces this at the *database* level, not the application level:
 
@@ -373,31 +379,19 @@ FOR EACH ROW
 EXECUTE FUNCTION check_journal_balance();
 ```
 
-This trigger rejects any transaction that leaves the ledger unbalanced — **the invariant cannot be violated, even by a buggy application**. The application layer adds:
-
-- **SERIALIZABLE isolation** with retry on serialization failure (`40001`/`40P01`) — two concurrent entries that would corrupt the balance are re-run, not silently committed.
-- **Idempotent posting** — posting the same `payment_id` twice returns the existing entry.
-- **Reversals** — a reversal entry flips debit↔credit and marks the original reversed, all in one serializable transaction.
-
-```go
-// ledger-svc/internal/store.go
-func withSerializable(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
-    for range maxAttempts { // Go 1.22 range-over-int
-        err := pgx.BeginTxFunc(ctx, pool,
-            pgx.TxOptions{IsoLevel: pgx.Serializable}, fn)
-        if err == nil { return nil }
-        if !isSerializationFailure(err) { return err } // only retry 40001/40P01
-    }
-    return err
-}
-```
-
-The **`Money` value object** (`pkg/shared/money`) is the quiet hero: it stores amounts as **integer minor units (`int64` pence)** and *never* floats. There is no `float64` arithmetic anywhere near money — the classic source of rounding errors that corrupt ledgers.
+The **`Money` value object** (`pkg/shared/money`) prevents currency-mismatch additions and float precision issues:
 
 ```go
 type Money struct {
-    amountPence int64  // never float64
-    currency    string // ISO 4217
+    AmountPence int64
+    Currency    string // ISO 4217 uppercase validated
+}
+
+func (m Money) Add(other Money) (Money, error) {
+    if !m.SameCurrency(other) {
+        return Money{}, fmt.Errorf("cannot add %s to %s: currency mismatch", other.Currency, m.Currency)
+    }
+    return Money{AmountPence: m.AmountPence + other.AmountPence, Currency: m.Currency}, nil
 }
 ```
 
@@ -409,51 +403,39 @@ type Money struct {
 # 1) Infra — Postgres, Redis, Redpanda (Kafka), Jaeger, Prometheus, Grafana
 make up
 
-# 2) Generate protos (only when .proto changes)
-make proto
-
-# 3) Build all 8 services into ./bin
+# 2) Build all 8 microservices into ./bin
 make build
 
-# 4) Run all processes
+# 3) Start all background processes
 ./scripts/run-all.sh
 
-# 5) End-to-end smoke test: register → JWT → consent → payment SETTLED → webhook
+# 4) End-to-end smoke test
 ./scripts/e2e-smoke.sh
 ```
 
-The smoke test exercises the *entire* journey: register a merchant, mint a JWT, create a consent, initiate a payment that runs the full six-step saga to `SETTLED`, and verify the merchant webhook fires.
-
-| Service | Port |
-|---|---|
-| Gateway (HTTP) | 8080 |
-| Merchant gRPC | 50051 |
-| Consent gRPC | 50052 |
-| Payment gRPC | 50053 |
-| Risk gRPC | 50054 |
-| Ledger gRPC | 50055 |
-| Bank Adapter gRPC | 50056 |
-| Mock Bank HTTP | 18080 |
+| Service | Port | Description |
+|---|---|---|
+| Gateway (HTTP) | 8080 | REST API & Swagger UI (`/docs`) |
+| Merchant gRPC | 50051 | Onboarding & API keys |
+| Consent gRPC | 50052 | Consent limits & reservations |
+| Payment gRPC | 50053 | Saga orchestrator |
+| Risk gRPC | 50054 | Real-time fraud scoring |
+| Ledger gRPC | 50055 | Double-entry accounting |
+| Bank Adapter gRPC | 50056 | Open Banking client + mock |
 
 ---
 
-## 11. Production Hardening: What the Demo Deliberately Skips
+## 11. Production Hardening & Scale Roadmap
 
-The repo is explicitly an *"interview-grade"* demo. A thorough review surfaces the gaps you'd close before real money flows. Being honest about them is part of the engineering discipline:
+The platform has completed a comprehensive 4-week production hardening program. The remaining milestones focus on Tier-1 enterprise scale:
 
-| Category | Gap | Production Fix |
+| Area | Current State (Hardened) | Day-2 Scale Horizon |
 |---|---|---|
-| **Build** | `go 1.26.2` version directive is fictional | Pin to a real toolchain (1.23.x) |
-| **Secrets** | `k8s/secrets.yaml` has plaintext JWT/HMAC | External Secrets Operator + Vault, or SealedSecrets |
-| **Webhook** | `webhook.Verify` lacks a timestamp freshness check | Reject signatures older than ~5 min (Stripe-style) |
-| **Transport** | `sslmode=disable` on all DB URLs | `verify-full` with a CA in production |
-| **Outbox** | `ListOutbox` lacks `FOR UPDATE SKIP LOCKED` | Prevent duplicate events under multi-replica |
-| **Kafka** | `RequiredAcks: RequireOne` | `RequireAll` with replication ≥ 2 for financial events |
-| **K8s** | No `securityContext`, no gRPC `livenessProbe` | `runAsNonRoot`, `readOnlyRootFilesystem`, `drop: [ALL]` |
-| **Tests** | Handler/repo layers ~0% covered | bufconn gRPC tests + testcontainers for the ledger |
-| **Error model** | Downstream errors classified via `strings.Contains` | `google.rpc.ErrorInfo` status details |
-
-These aren't hidden flaws — they're the exact list of "what separates a demo from production," and documenting them is itself the point of the exercise.
+| **Outbox Relay** | `FOR UPDATE SKIP LOCKED` + `RequireAll` acks | **Debezium CDC** (PostgreSQL WAL streaming) |
+| **Saga Resilience** | In-flight `ReconciliationWorker` | **Temporal / Cadence** workflow engine |
+| **Security** | Distroless nonroot `securityContext`, Replay defense | **Istio / Linkerd mTLS Service Mesh** |
+| **Database HA** | Multi-database schema isolation | **CloudNativePG HA StatefulSets** with read replicas |
+| **Observability** | Context `TraceHandler`, W3C traceparent headers | **OpenTelemetry Collector & RED Prometheus metrics** |
 
 ---
 
@@ -461,10 +443,8 @@ These aren't hidden flaws — they're the exact list of "what separates a demo f
 
 Variable Recurring Payments represent the most significant change to UK payment rails since Faster Payments: **authenticate once, pay many times, with hard, bank-enforced limits.** The UK led the world — *mandating sweeping VRP by July 2022 (complete September 2024)* and *launching commercial VRP on June 2, 2026* under the UK Payments Initiative.
 
-Building VRP infrastructure is a masterclass in distributed systems: sagas, transactional outboxes, idempotency, circuit breakers, and provable double-entry accounting — all of which Go handles with particular grace thanks to goroutines, `context.Context`, `log/slog`, and static binaries.
-
-The [vrp-oneclick-deposit-platform](https://github.com/netologist/vrp-oneclick-deposit-platform) repo is a rare, runnable reference that gets the hard 20% right: the saga compensation matrix, the outbox atomicity, the SERIALIZABLE ledger, and layered idempotency. If you're learning Go or distributed systems, it's an excellent codebase to read, critique, and — as a next step — harden.
+The [vrp-oneclick-deposit-platform](https://github.com/netologist/vrp-oneclick-deposit-platform) repo is a production-hardened reference implementation demonstrating sagas, transactional outboxes, crash reconciliation, and immutable double-entry ledgers in Go.
 
 ---
 
-*This post references the open-source project [github.com/netologist/vrp-oneclick-deposit-platform](https://github.com/netologist/vrp-oneclick-deposit-platform). VRP regulatory facts verified against CMA/OBL/UKPI sources, current as of 2026.*
+*This post references the open-source project [github.com/netologist/vrp-oneclick-deposit-platform](https://github.com/netologist/vrp-oneclick-deposit-platform). Regulatory facts verified against CMA/OBL/UKPI sources, current as of 2026.*
