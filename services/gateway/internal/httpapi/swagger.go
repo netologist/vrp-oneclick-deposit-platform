@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -23,7 +22,10 @@ func (h *Handlers) ServeOpenAPISpec(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	_, _ = w.Write([]byte(SwaggerUIHTML))
+}
+
+const SwaggerUIHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -57,9 +59,7 @@ func (h *Handlers) ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
     };
   </script>
 </body>
-</html>`)
-	_, _ = w.Write([]byte(html))
-}
+</html>`
 
 const OpenAPISpecYAML = `openapi: "3.0.3"
 info:

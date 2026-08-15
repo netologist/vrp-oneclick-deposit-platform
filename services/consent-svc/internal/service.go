@@ -129,11 +129,11 @@ func (s *Service) GetConsent(ctx context.Context, consentID, merchantID string) 
 	return row, nil
 }
 
-func (s *Service) RevokeConsent(ctx context.Context, consentID, merchantID, _ string) (*ConsentRow, error) {
+func (s *Service) RevokeConsent(ctx context.Context, consentID, merchantID, reason string) (*ConsentRow, error) {
 	if consentID == "" {
 		return nil, domainerr.New(domainerr.CodeValidation, "consent_id is required")
 	}
-
+	slog.InfoContext(ctx, "revoking consent", "consent_id", consentID, "merchant_id", merchantID, "reason", reason)
 	// Load first for precise error codes.
 	existing, err := s.repo.GetConsent(ctx, consentID)
 	if errors.Is(err, pgx.ErrNoRows) {
