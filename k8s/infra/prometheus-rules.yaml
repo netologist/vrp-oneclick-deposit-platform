@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vrp-platform-alerts
+  namespace: vrp-demo
+  labels:
+    role: alert-rules
+spec:
+  groups:
+    - name: vrp.saga.rules
+      rules:
+        - alert: VRPSagaHighLatencyP99
+          expr: histogram_quantile(0.99, sum(rate(payment_saga_duration_seconds_bucket[5m])) by (le)) > 0.5
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "VRP payment saga P99 latency exceeded 500ms SLA"
+            description: "P99 latency is currently {{ $value }}s over the last 5 minutes."
+
+        - alert: VRPHighCompensationRate
+          expr: sum(rate(payment_saga_compensations_total[5m])) / sum(rate(payment_saga_total[5m])) > 0.02
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VRP payment saga compensation rate exceeded 2%"
+            description: "Compensation rate is currently {{ $value | humanizePercentage }}."
+
+        - alert: VRPRedisRateLimiterUnavailable
+          expr: rate_limit_redis_errors_total > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Gateway rate limiter experiencing Redis connection errors"
