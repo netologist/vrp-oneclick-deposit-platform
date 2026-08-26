@@ -4,6 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
 	"github.com/redis/go-redis/v9"
 
@@ -14,17 +17,22 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(config.Get("LOG_LEVEL", "info")),
+	})))
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	addr := config.Get("RISK_GRPC_ADDR", ":50054")
 	redisAddr := config.Get("REDIS_ADDR", "localhost:6379")
 
 	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
-	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		slog.Error("redis ping failed", "addr", redisAddr, "err", err)
 		os.Exit(1)
 	}
+	defer rdb.Close()
 
 	engine := internal.NewEngine(rdb)
 	handler := internal.NewHandler(engine, rdb)
@@ -37,5 +45,18 @@ func main() {
 	if err := srv.Serve(ctx); err != nil {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
+	}
+}
+
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
 }

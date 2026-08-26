@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 )
 
 type Repo struct {
@@ -67,14 +66,8 @@ func (r *Repo) GetByID(ctx context.Context, id string) (*Merchant, error) {
 	return m, nil
 }
 
-// GetByAPIKey looks up active keys by the first 8 chars of the plaintext key,
-// then bcrypt-compares the full key and returns the joined merchant.
-func (r *Repo) GetByAPIKey(ctx context.Context, apiKey string) (*Merchant, error) {
-	if len(apiKey) < 8 {
-		return nil, domainerr.New(domainerr.CodeNotFound, "merchant not found")
-	}
-	prefix := apiKey[:8]
-
+// GetCandidatesByPrefix returns all active API key candidate hashes matching the given prefix.
+func (r *Repo) GetCandidatesByPrefix(ctx context.Context, prefix string) ([]APIKeyCandidate, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT m.id, m.name, m.webhook_url, COALESCE(m.contact_email, ''), m.kyb_status, m.status,
 		       m.hmac_secret, m.created_at, m.updated_at, ak.key_hash
@@ -87,6 +80,7 @@ func (r *Repo) GetByAPIKey(ctx context.Context, apiKey string) (*Merchant, error
 	}
 	defer rows.Close()
 
+	var candidates []APIKeyCandidate
 	for rows.Next() {
 		var (
 			m       Merchant
@@ -98,14 +92,12 @@ func (r *Repo) GetByAPIKey(ctx context.Context, apiKey string) (*Merchant, error
 		); err != nil {
 			return nil, domainerr.Wrap(domainerr.CodeInternal, "scan api_key row", err)
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(keyHash), []byte(apiKey)); err == nil {
-			return &m, nil
-		}
+		candidates = append(candidates, APIKeyCandidate{Merchant: &m, KeyHash: keyHash})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, domainerr.Wrap(domainerr.CodeInternal, "iterate api_key rows", err)
 	}
-	return nil, domainerr.New(domainerr.CodeNotFound, "merchant not found")
+	return candidates, nil
 }
 
 func (r *Repo) Suspend(ctx context.Context, id string) (*Merchant, error) {

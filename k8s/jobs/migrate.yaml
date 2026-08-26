@@ -17,11 +17,16 @@ spec:
       containers:
         - name: migrate
           image: postgres:16-alpine
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vrp-secrets
+                  key: POSTGRES_PASSWORD
           command: ["sh", "-c"]
           args:
             - |
               set -e
-              export PGPASSWORD=vrp
               for i in $(seq 1 30); do
                 pg_isready -h postgres -U vrp && break
                 sleep 2

@@ -14,7 +14,7 @@ func TestSignVerifyRoundtrip(t *testing.T) {
 
 	secret := "whsec_test_secret"
 	body := []byte(`{"event":"payment.settled","id":"pay_1"}`)
-	ts := time.Unix(1_700_000_000, 0).UTC()
+	ts := time.Now().UTC()
 
 	sig := webhook.Sign(secret, ts, body)
 	require.NotEmpty(t, sig)
@@ -27,7 +27,7 @@ func TestVerifyRejectsTampering(t *testing.T) {
 
 	secret := "whsec_test_secret"
 	body := []byte(`{"ok":true}`)
-	ts := time.Unix(1_700_000_000, 0).UTC()
+	ts := time.Now().UTC()
 	sig := webhook.Sign(secret, ts, body)
 
 	tests := []struct {
@@ -80,6 +80,45 @@ func TestVerifyRejectsTampering(t *testing.T) {
 			assert.False(t, webhook.Verify(tt.secret, tt.signature, tt.timestamp, tt.body))
 		})
 	}
+}
+
+func TestVerifyReplayProtection(t *testing.T) {
+	t.Parallel()
+
+	secret := "whsec_test_secret"
+	body := []byte(`{"event":"payment.settled"}`)
+
+	t.Run("valid timestamp within default window", func(t *testing.T) {
+		ts := time.Now().Add(-2 * time.Minute)
+		sig := webhook.Sign(secret, ts, body)
+		assert.True(t, webhook.Verify(secret, sig, ts, body))
+	})
+
+	t.Run("expired timestamp beyond default window", func(t *testing.T) {
+		ts := time.Now().Add(-6 * time.Minute)
+		sig := webhook.Sign(secret, ts, body)
+		assert.False(t, webhook.Verify(secret, sig, ts, body), "expected 6-minute-old signature to be rejected")
+	})
+
+	t.Run("future timestamp beyond default window", func(t *testing.T) {
+		ts := time.Now().Add(6 * time.Minute)
+		sig := webhook.Sign(secret, ts, body)
+		assert.False(t, webhook.Verify(secret, sig, ts, body), "expected future signature beyond window to be rejected")
+	})
+
+	t.Run("custom tolerance window", func(t *testing.T) {
+		ts := time.Now().Add(-10 * time.Minute)
+		sig := webhook.Sign(secret, ts, body)
+
+		assert.False(t, webhook.VerifyWithTolerance(secret, sig, ts, body, 5*time.Minute))
+		assert.True(t, webhook.VerifyWithTolerance(secret, sig, ts, body, 15*time.Minute))
+	})
+
+	t.Run("disabled tolerance check", func(t *testing.T) {
+		oldTS := time.Unix(1_700_000_000, 0).UTC()
+		sig := webhook.Sign(secret, oldTS, body)
+		assert.True(t, webhook.VerifyWithTolerance(secret, sig, oldTS, body, 0))
+	})
 }
 
 func TestSignDeterministic(t *testing.T) {

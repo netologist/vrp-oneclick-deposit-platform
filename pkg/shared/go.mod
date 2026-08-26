@@ -1,6 +1,6 @@
 module github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared
 
-go 1.25.0
+go 1.26.2
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0

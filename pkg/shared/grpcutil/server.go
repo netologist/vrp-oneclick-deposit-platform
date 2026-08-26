@@ -5,15 +5,19 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
-	"os/signal"
-	"syscall"
+	"strings"
 	"time"
 
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/logutil"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 type Server struct {
@@ -40,9 +44,10 @@ func (s *Server) SetServing(service string, serving bool) {
 		st = healthpb.HealthCheckResponse_NOT_SERVING
 	}
 	s.Health.SetServingStatus(service, st)
-	s.Health.SetServingStatus("", st)
 }
 
+// Serve starts the gRPC listener and blocks until ctx is cancelled or an error occurs.
+// When ctx is cancelled, it performs graceful drain and shutdown.
 func (s *Server) Serve(ctx context.Context) error {
 	lis, err := net.Listen("tcp", s.addr)
 	if err != nil {
@@ -54,13 +59,9 @@ func (s *Server) Serve(ctx context.Context) error {
 		errCh <- s.GRPC.Serve(lis)
 	}()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
 	select {
 	case <-ctx.Done():
-	case sig := <-sigCh:
-		slog.Info("shutdown signal", "signal", sig.String())
+		slog.Info("shutdown triggered, draining grpc server", "addr", s.addr)
 	case err := <-errCh:
 		return err
 	}
@@ -82,16 +83,32 @@ func (s *Server) Serve(ctx context.Context) error {
 func LoggingUnary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
+
+		// Extract incoming metadata (x-request-id, traceparent) and enrich context
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if reqIDs := md.Get("x-request-id"); len(reqIDs) > 0 && reqIDs[0] != "" {
+				ctx = logutil.WithRequestID(ctx, reqIDs[0])
+			}
+			if tp := md.Get("traceparent"); len(tp) > 0 && tp[0] != "" {
+				// W3C traceparent format: 00-<trace_id>-<span_id>-<flags>
+				parts := strings.Split(tp[0], "-")
+				if len(parts) >= 3 {
+					ctx = logutil.WithTraceContext(ctx, parts[1], parts[2])
+				}
+			}
+		}
+
 		resp, err := handler(ctx, req)
 		level := slog.LevelInfo
-		if err != nil {
-			level = slog.LevelWarn
-		}
-		slog.Log(ctx, level, "grpc",
+		attrs := []any{
 			"method", info.FullMethod,
 			"duration", time.Since(start).String(),
-			"err", err,
-		)
+		}
+		if err != nil {
+			level = slog.LevelWarn
+			attrs = append(attrs, "err", err)
+		}
+		slog.Log(ctx, level, "grpc", attrs...)
 		return resp, err
 	}
 }
@@ -101,17 +118,26 @@ func RecoveryUnary() grpc.UnaryServerInterceptor {
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("panic recovered", "method", info.FullMethod, "panic", r)
-				err = fmt.Errorf("internal panic")
+				err = status.Errorf(codes.Internal, "internal server error")
 			}
 		}()
 		return handler(ctx, req)
 	}
 }
 
+// Dial creates a client connection with modern grpc.NewClient and keepalive parameters.
 func Dial(ctx context.Context, addr string) (*grpc.ClientConn, error) {
-	return grpc.DialContext(ctx, addr, //nolint:staticcheck // DialContext still common; NewClient ok too
-		grpc.WithInsecure(), // demo only
-		grpc.WithBlock(),
-		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
-	)
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                10 * time.Second,
+			Timeout:             3 * time.Second,
+			PermitWithoutStream: true,
+		}),
+		grpc.WithDefaultCallOptions(
+			grpc.WaitForReady(true),
+			grpc.MaxCallRecvMsgSize(4 * 1024 * 1024),
+		),
+	}
+	return grpc.NewClient(addr, opts...)
 }

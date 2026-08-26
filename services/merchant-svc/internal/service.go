@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 
 	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
@@ -69,11 +70,12 @@ func (s *Service) GetMerchant(ctx context.Context, id string) (*Merchant, error)
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *Service) SuspendMerchant(ctx context.Context, id, _ string) (*Merchant, error) {
+func (s *Service) SuspendMerchant(ctx context.Context, id, reason string) (*Merchant, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, domainerr.New(domainerr.CodeValidation, "merchant_id is required")
 	}
+	slog.WarnContext(ctx, "suspending merchant", "merchant_id", id, "reason", reason)
 	return s.repo.Suspend(ctx, id)
 }
 
@@ -82,7 +84,22 @@ func (s *Service) GetMerchantByAPIKey(ctx context.Context, apiKey string) (*Merc
 	if apiKey == "" {
 		return nil, domainerr.New(domainerr.CodeValidation, "api_key is required")
 	}
-	return s.repo.GetByAPIKey(ctx, apiKey)
+	if len(apiKey) < 8 {
+		return nil, domainerr.New(domainerr.CodeNotFound, "merchant not found")
+	}
+	prefix := apiKey[:8]
+
+	candidates, err := s.repo.GetCandidatesByPrefix(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, c := range candidates {
+		if err := bcrypt.CompareHashAndPassword([]byte(c.KeyHash), []byte(apiKey)); err == nil {
+			return c.Merchant, nil
+		}
+	}
+	return nil, domainerr.New(domainerr.CodeNotFound, "merchant not found")
 }
 
 func (s *Service) GetWebhookConfig(ctx context.Context, merchantID string) (*WebhookConfig, error) {

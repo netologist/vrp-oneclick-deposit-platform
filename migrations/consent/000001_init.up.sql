@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS consent (
     merchant_id       UUID NOT NULL,
     consumer_id       TEXT NOT NULL,
     bank_consent_ref  TEXT NOT NULL UNIQUE,
-    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    status            TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('PENDING', 'ACTIVE', 'REVOKED', 'EXPIRED')),
     max_amount_pence  BIGINT NOT NULL,
     max_monthly_pence BIGINT NOT NULL,
     currency          CHAR(3) NOT NULL DEFAULT 'GBP',
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS consent_reservation (
     consent_id   UUID NOT NULL REFERENCES consent(id),
     payment_id   UUID NOT NULL UNIQUE,
     amount_pence BIGINT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'HELD', -- HELD | CONFIRMED | RELEASED
+    status       TEXT NOT NULL DEFAULT 'HELD' CHECK (status IN ('HELD', 'CONFIRMED', 'RELEASED')),
     expires_at   TIMESTAMPTZ NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

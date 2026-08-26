@@ -107,8 +107,19 @@ func AuthMiddleware(tokens *auth.TokenService) func(http.Handler) http.Handler {
 	}
 }
 
-// RateLimitMiddleware enforces ~limitPerSec requests/second per merchant via Redis INCR window.
-// If Redis is nil or unavailable, the limit is skipped.
+// rateLimitLua is an atomic Lua script that increments the key and sets a 2-second TTL on first hit.
+var rateLimitLua = redis.NewScript(`
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, 2)
+end
+return current
+`)
+
+// RateLimitMiddleware enforces limitPerSec requests/second per merchant via an atomic Redis Lua script.
+// If Redis is nil or unavailable, the request is permitted (fail-open for resilience).
 func RateLimitMiddleware(rdb *redis.Client, limitPerSec int) func(http.Handler) http.Handler {
 	if limitPerSec <= 0 {
 		limitPerSec = 100
@@ -129,14 +140,11 @@ func RateLimitMiddleware(rdb *redis.Client, limitPerSec int) func(http.Handler) 
 			window := time.Now().Unix()
 			key := "ratelimit:" + merchantID + ":" + strconv.FormatInt(window, 10)
 
-			n, err := rdb.Incr(ctx, key).Result()
+			n, err := rateLimitLua.Run(ctx, rdb, []string{key}, limitPerSec).Int64()
 			if err != nil {
 				slog.Warn("rate_limit_redis_error", "err", err, "merchant_id", merchantID)
 				next.ServeHTTP(w, r)
 				return
-			}
-			if n == 1 {
-				_ = rdb.Expire(ctx, key, 2*time.Second).Err()
 			}
 			if n > int64(limitPerSec) {
 				w.Header().Set("Retry-After", "1")

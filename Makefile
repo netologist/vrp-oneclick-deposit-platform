@@ -44,7 +44,7 @@ run-all: build
 
 test:
 	cd pkg/shared && go test ./...
-	@for svc in merchant-svc consent-svc risk-svc ledger-svc bank-adapter payment-svc; do \
+	@for svc in gateway merchant-svc consent-svc risk-svc ledger-svc bank-adapter payment-svc notification-svc; do \
 		(cd services/$$svc && go test ./...); \
 	done
 

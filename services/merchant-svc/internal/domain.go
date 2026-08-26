@@ -49,6 +49,11 @@ type RegisterInput struct {
 	ContactEmail string
 }
 
+type APIKeyCandidate struct {
+	Merchant *Merchant
+	KeyHash  string
+}
+
 type RegisterResult struct {
 	Merchant *Merchant
 	APIKey   string // plaintext, shown once

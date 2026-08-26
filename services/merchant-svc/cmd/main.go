@@ -4,6 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
 	merchantv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/merchant/v1"
 	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/config"
@@ -15,9 +18,12 @@ import (
 const serviceName = "merchant.v1.MerchantService"
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(config.Get("LOG_LEVEL", "info")),
+	})))
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	dbURL := config.Get("MERCHANT_DB_URL", "postgres://vrp:vrp@localhost:5432/merchant?sslmode=disable")
 	addr := config.Get("MERCHANT_GRPC_ADDR", ":50051")
@@ -41,5 +47,18 @@ func main() {
 	if err := srv.Serve(ctx); err != nil {
 		slog.Error("grpc serve failed", "err", err)
 		os.Exit(1)
+	}
+}
+
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
 }

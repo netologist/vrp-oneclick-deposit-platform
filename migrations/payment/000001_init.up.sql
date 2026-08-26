@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS payment (
     consumer_id      TEXT NOT NULL DEFAULT '',
     amount_pence     BIGINT NOT NULL,
     currency         CHAR(3) NOT NULL DEFAULT 'GBP',
-    status           TEXT NOT NULL DEFAULT 'INITIATED',
+    status           TEXT NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'CONSENT_RESERVED', 'RISK_PASSED', 'AUTHORISING', 'SETTLED', 'FAILED', 'MANUAL_REVIEW')),
     bank_payment_ref TEXT,
     reservation_id   UUID,
     risk_score       INT,

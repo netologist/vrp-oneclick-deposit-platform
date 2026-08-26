@@ -23,11 +23,20 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	httpAddr := config.Get("GATEWAY_HTTP_ADDR", ":8080")
-	jwtSecret := config.Get("JWT_SECRET", "super-secret-jwt-key")
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		env := config.Get("ENVIRONMENT", "")
+		appEnv := config.Get("APP_ENV", "")
+		if env == "production" || env == "prod" || appEnv == "production" {
+			slog.Error("JWT_SECRET is required in production environment")
+			os.Exit(1)
+		}
+		slog.Warn("JWT_SECRET unset; using insecure default (development only)")
+		jwtSecret = "super-secret-jwt-key"
+	}
 	jwtTTL := config.GetDuration("JWT_TTL", time.Hour)
 	redisAddr := config.Get("REDIS_ADDR", "localhost:6379")
 	rateLimit := config.GetInt("GATEWAY_RATE_LIMIT_RPS", 100)
-
 	merchantAddr := config.Get("MERCHANT_SVC_ADDR", "localhost:50051")
 	consentAddr := config.Get("CONSENT_SVC_ADDR", "localhost:50052")
 	paymentAddr := config.Get("PAYMENT_SVC_ADDR", "localhost:50053")
@@ -59,8 +68,7 @@ func main() {
 	}
 	defer paymentConn.Close()
 
-	var rdb *redis.Client
-	rdb = redis.NewClient(&redis.Options{Addr: redisAddr})
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		slog.Warn("redis_unavailable_rate_limit_disabled", "addr", redisAddr, "err", err)
 		_ = rdb.Close()

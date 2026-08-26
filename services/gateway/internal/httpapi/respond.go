@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/netologist/vrp-oneclick-deposit-platform/pkg/shared/domainerr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -33,6 +34,27 @@ func decodeJSON(r *http.Request, dst any) error {
 }
 
 func mapGRPCError(w http.ResponseWriter, r *http.Request, err error) {
+	if de := domainerr.FromGRPC(err); de != nil && de.Code != domainerr.CodeInternal {
+		switch de.Code {
+		case domainerr.CodeValidation:
+			writeError(w, r, http.StatusBadRequest, string(de.Code), de.Message)
+		case domainerr.CodeNotFound:
+			writeError(w, r, http.StatusNotFound, string(de.Code), de.Message)
+		case domainerr.CodeAlreadyExists, domainerr.CodeDuplicateIdempotency:
+			writeError(w, r, http.StatusConflict, string(de.Code), de.Message)
+		case domainerr.CodeConsentLimitExceeded, domainerr.CodeConsentExpired,
+			domainerr.CodeConsentRevoked, domainerr.CodeConsentInactive,
+			domainerr.CodeRiskDeclined, domainerr.CodeBankRejected,
+			domainerr.CodeMerchantSuspended, domainerr.CodeConflict:
+			writeError(w, r, http.StatusUnprocessableEntity, string(de.Code), de.Message)
+		case domainerr.CodeBankUnavailable:
+			writeError(w, r, http.StatusServiceUnavailable, string(de.Code), de.Message)
+		default:
+			writeError(w, r, http.StatusInternalServerError, string(de.Code), de.Message)
+		}
+		return
+	}
+
 	st, ok := status.FromError(err)
 	if !ok {
 		writeError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "unexpected error")

@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-
+	"time"
 	bankv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/bank/v1"
 	consentv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/consent/v1"
 	ledgerv1 "github.com/netologist/vrp-oneclick-deposit-platform/gen/ledger/v1"
@@ -104,6 +104,10 @@ func main() {
 	defer relay.Close()
 	go relay.Run(ctx)
 
+	reconInterval := config.GetDuration("RECONCILIATION_INTERVAL", 30*time.Second)
+	reconStaleAfter := config.GetDuration("RECONCILIATION_STALE_AFTER", 1*time.Minute)
+	reconciler := internal.NewReconciliationWorker(repo, orch, bankv1.NewBankAdapterClient(bankConn), reconInterval, reconStaleAfter)
+	go reconciler.Start(ctx)
 	srv := grpcutil.NewServer(addr)
 	paymentv1.RegisterPaymentServiceServer(srv.GRPC, handler)
 	srv.SetServing("", true)
