@@ -1,0 +1,11 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: vrp-postgres-daily-backup
+  namespace: vrp-demo
+spec:
+  schedule: "0 0 2 * * *" # Daily at 02:00 UTC
+  backupOwnerReference: self
+  cluster:
+    name: vrp-postgres-ha
+  method: barmanObjectStore
