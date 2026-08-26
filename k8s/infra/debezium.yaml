@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debezium-connect
+  namespace: vrp-demo
+  labels:
+    app: debezium-connect
+    app.kubernetes.io/part-of: vrp-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debezium-connect
+  template:
+    metadata:
+      labels:
+        app: debezium-connect
+    spec:
+      serviceAccountName: vrp-svc-account
+      containers:
+        - name: debezium-connect
+          image: quay.io/debezium/connect:2.7
+          ports:
+            - containerPort: 8083
+              name: connect-http
+          env:
+            - name: BOOTSTRAP_SERVERS
+              value: "redpanda:9092"
+            - name: GROUP_ID
+              value: "vrp-debezium-cluster"
+            - name: CONFIG_STORAGE_TOPIC
+              value: "debezium.connect.configs"
+            - name: OFFSET_STORAGE_TOPIC
+              value: "debezium.connect.offsets"
+            - name: STATUS_STORAGE_TOPIC
+              value: "debezium.connect.status"
+            - name: KEY_CONVERTER
+              value: "org.apache.kafka.connect.storage.StringConverter"
+            - name: VALUE_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: ENABLE_DEBEZIUM_SCRIPTING
+              value: "false"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          readinessProbe:
+            httpGet:
+              path: /connectors
+              port: 8083
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8083
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: debezium-connect
+  namespace: vrp-demo
+  labels:
+    app: debezium-connect
+spec:
+  selector:
+    app: debezium-connect
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083
